@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { height: 100%; }
+body { @apply bg-zinc-950 text-zinc-50 antialiased; }
+
+.btn-outline-dark { @apply border border-zinc-700 text-zinc-100 hover:bg-zinc-800; }
+.input-dark { @apply bg-zinc-800 text-zinc-100 border border-zinc-700 placeholder:text-zinc-400; }
