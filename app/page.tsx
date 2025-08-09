@@ -75,7 +75,16 @@ const slug = (s: string) =>
     .replace(/(^-|-$)+/g, "");
 
 function normalizeText(s: string) {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// Alpha sorting helper for pool (French collator, accent-insensitive)
+const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
+function sortIdsAlpha(ids: string[], items: Record<string, Item>) {
+  return [...ids].sort((a, b) => collator.compare(
+    normalizeText(items[a]?.name || a),
+    normalizeText(items[b]?.name || b)
+  ));
 }
 
 function textColorForBg(hex: string) {
@@ -224,7 +233,7 @@ function stateFromNames(names: string[]): AppState {
     items[id] = { id, name: n };
     pool.push(id);
   });
-  containers[POOL_ID] = pool;
+  containers[POOL_ID] = sortIdsAlpha(pool, items);
   return {
     rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
     cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
@@ -247,7 +256,7 @@ function stateFromEntries(entries: Array<{ name: string; image?: string; id?: st
     items[uid] = { id: uid, name, image };
     pool.push(uid);
   });
-  containers[POOL_ID] = pool;
+  containers[POOL_ID] = sortIdsAlpha(pool, items);
   return {
     rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
     cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
@@ -450,7 +459,9 @@ export default function TierList2D() {
       const idx = src.indexOf(itemId);
       if (idx > -1) src.splice(idx, 1);
       next.containers[from] = src;
-      next.containers[containerId] = [...next.containers[containerId], itemId];
+      next.containers[containerId] = (containerId === next.poolId)
+        ? sortIdsAlpha([...(next.containers[containerId] || []), itemId], next.items)
+        : [...(next.containers[containerId] || []), itemId];
       return next;
     });
   }
@@ -467,6 +478,10 @@ export default function TierList2D() {
       const next = { ...prev, containers: { ...prev.containers } } as AppState;
       const sourceItems = [...next.containers[sourceContainer]]; const destItems = [...next.containers[destContainer]];
       const idx = sourceItems.indexOf(activeId); if (idx > -1) sourceItems.splice(idx, 1); destItems.push(activeId);
+      if (destContainer === next.poolId) {
+        const sorted = sortIdsAlpha(destItems, next.items);
+        destItems.length = 0; destItems.push(...sorted);
+      }
       next.containers[sourceContainer] = sourceItems; next.containers[destContainer] = destItems; return next; }); }
   function handleDragEnd(event: any) {
     const { active, over } = event; setActiveId(null); if (!over) return;
@@ -474,10 +489,20 @@ export default function TierList2D() {
     const sourceContainer = getContainerByItem(activeId); const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
     if (!sourceContainer || !destContainer) return;
     if (sourceContainer === destContainer) {
-      setState((prev) => { const items = [...prev.containers[sourceContainer]]; const oldIndex = items.indexOf(activeId);
-        let newIndex = items.indexOf(overId); if (newIndex === -1) newIndex = oldIndex;
-        return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) }, } as AppState; }); }
+      setState((prev) => {
+        if (sourceContainer === prev.poolId) {
+          const sorted = sortIdsAlpha([...(prev.containers[sourceContainer] || [])], prev.items);
+          return { ...prev, containers: { ...prev.containers, [sourceContainer]: sorted } } as AppState;
+        }
+        const items = [...(prev.containers[sourceContainer] || [])];
+        const oldIndex = items.indexOf(activeId);
+        let newIndex = items.indexOf(overId);
+        if (newIndex === -1) newIndex = oldIndex;
+        return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) } } as AppState;
+      });
+    }
   }
+
 
   // UI actions for rows/cols
   function addRow() { setState((s) => ({ ...s, rows: [...s.rows, { label: `Ligne ${s.rows.length + 1}`, color: "#94a3b8" }] })); }
@@ -490,7 +515,7 @@ export default function TierList2D() {
   function recolorCol(i: number, v: string) { setState((s) => { const cols = [...s.cols]; cols[i] = { ...cols[i], color: v }; return { ...s, cols }; }); }
   function setColWidth(i: number, v: number) { setState((s) => { const cw = [...s.colWidths]; const w = Math.max(140, Math.min(560, Math.round(v))); cw[i] = w; return { ...s, colWidths: cw }; }); }
   function applyColWidthAll(v: number) { setState((s) => ({ ...s, colWidths: Array(s.cols.length).fill(Math.max(140, Math.min(560, Math.round(v)))) })); }
-  function clearGridKeepItems() { setState((s) => { const containers = makeEmptyGrid(s.rows.length, s.cols.length); const allIds = Object.values(s.containers).flat(); containers[POOL_ID] = allIds; return { ...s, containers }; }); }
+  function clearGridKeepItems() { setState((s) => { const containers = makeEmptyGrid(s.rows.length, s.cols.length); const allIds = Object.values(s.containers).flat(); containers[POOL_ID] = sortIdsAlpha(allIds, s.items); return { ...s, containers }; }); }
   function resetAll() { setState(stateFromNames([])); history.replaceState(null, "", "#"); }
   function exportState() { try { const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "tierlist2d_state.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); } catch { alert("Export impossible dans cet environnement."); } }
   function importStateFromFile(file: File) {
@@ -516,7 +541,7 @@ export default function TierList2D() {
       pool.push(uid);
     }
     setPairsText("");
-    setState((s)=> ({ ...s, items, containers: { ...s.containers, [s.poolId]: pool } }));
+    setState((s)=> ({ ...s, items, containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) } }) );
   }
 
   const T = DARK; // always dark
@@ -737,7 +762,7 @@ export default function TierList2D() {
             <p className={cx("text-sm", T.mutedText)}>
               Une ligne par artiste. Formats acceptés : <code>Nom\tURL</code>, <code>Nom | URL</code>, <code>Nom,URL</code>, <code>Nom;URL</code>.
             </p>
-            <Textarea className={INPUT_DARK} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg\nPNL | https://exemple.com/pnl.webp`} />
+            <Textarea className={cx("w-full resize-y", INPUT_DARK)} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg\nPNL | https://exemple.com/pnl.webp`} />
             <div className="flex gap-2">
               <Button onClick={importPairs}><Upload className="w-4 h-4 mr-2" />Ajouter au bac</Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}><Trash2 className="w-4 h-4 mr-2" />Vider la zone</Button>
