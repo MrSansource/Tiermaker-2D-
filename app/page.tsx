@@ -142,7 +142,8 @@ export default function Page(){
   function shareURL(copyOnly=true){ const enc=encodeState(state); if(!enc) return; const url=`${location.origin}${location.pathname}#${enc}`; navigator.clipboard?.writeText(url); if(!copyOnly) history.replaceState(null,"",`#${enc}`); alert("Lien copié dans le presse-papiers ✨"); }
   function importPairs(){ const entries=parsePairs(pairsText); if(!entries.length) return; const items={...state.items}; const pool=[...(state.containers[state.poolId]||[])]; for(const {name,image} of entries){ const base=slug(name)||Math.random().toString(36).slice(2); const uid=items[base]?`${base}-${Math.random().toString(36).slice(2,6)}`:base; items[uid]={id:uid, name, image: normalizeImageURL(image)}; pool.push(uid); } setPairsText(""); setState(s=>({...s, items, containers:{...s.containers, [s.poolId]: sortIdsAlpha(pool, items)}})); }
 
-  const gridTemplate = { gridTemplateColumns: `minmax(140px, max-content) ${state.colWidths.map((w)=>`${w}px`).join(" ")}` } as React.CSSProperties;
+  const colsPx = state.colWidths.map((w) => String(w) + "px").join(" ");
+  const gridTemplate = { gridTemplateColumns: `minmax(140px, max-content) ${colsPx}` } as React.CSSProperties;
   const poolIds = state.containers[state.poolId] || [];
 
   return (<div className={"min-h-screen bg-zinc-950 text-zinc-50"}>
