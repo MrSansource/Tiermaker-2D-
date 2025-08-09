@@ -142,11 +142,18 @@ export default function Page(){
   function shareURL(copyOnly=true){ const enc=encodeState(state); if(!enc) return; const url=`${location.origin}${location.pathname}#${enc}`; navigator.clipboard?.writeText(url); if(!copyOnly) history.replaceState(null,"",`#${enc}`); alert("Lien copié dans le presse-papiers ✨"); }
   function importPairs(){ const entries=parsePairs(pairsText); if(!entries.length) return; const items={...state.items}; const pool=[...(state.containers[state.poolId]||[])]; for(const {name,image} of entries){ const base=slug(name)||Math.random().toString(36).slice(2); const uid=items[base]?`${base}-${Math.random().toString(36).slice(2,6)}`:base; items[uid]={id:uid, name, image: normalizeImageURL(image)}; pool.push(uid); } setPairsText(""); setState(s=>({...s, items, containers:{...s.containers, [s.poolId]: sortIdsAlpha(pool, items)}})); }
 
-  const colsPx = state.colWidths.map((w) => String(w) + "px").join(" ");
-  const gridTemplate = { gridTemplateColumns: `minmax(140px, max-content) ${colsPx}` } as React.CSSProperties;
+  const colsPx = (state.colWidths?.length
+  ? state.colWidths
+  : Array(state.cols.length).fill(220)
+).map(w => String(w) + 'px').join(' ');
+
+const gridTemplate = {
+  gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
+} as React.CSSProperties;
   const poolIds = state.containers[state.poolId] || [];
 
-  return (<div className={"min-h-screen bg-zinc-950 text-zinc-50"}>
+  return (
+    <div className={"min-h-screen bg-zinc-950 text-zinc-50"}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
