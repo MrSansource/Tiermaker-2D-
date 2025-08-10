@@ -49,15 +49,23 @@ type AppState = {
 const POOL_ID = "__pool__";
 
 const DEFAULT_ROWS: Row[] = [
-  { label: "Bas", color: "#ef4444" },
-  { label: "Moyen", color: "#f59e0b" },
-  { label: "Haut", color: "#22c55e" },
-  { label: "S-tier", color: "#6366f1" },
+   { label: "GOATS",       color: "#f59e0b" }, // amber 500 (or) — gold
+  { label: "Excellent",   color: "#22c55e" }, // green 500
+  { label: "Bon",         color: "#06b6d4" }, // cyan 500
+  { label: "Moyen plus",  color: "#3b82f6" }, // blue 500
+  { label: "Moyen",       color: "#a855f7" }, // purple 500
+  { label: "Mauvais",     color: "#f97316" }, // orange 500
+  { label: "Trash",       color: "#ef4444" }, // red 500
 ];
 const DEFAULT_COLS: Col[] = [
-  { label: "Gauche", color: "#14b8a6" },
-  { label: "Centre", color: "#06b6d4" },
-  { label: "Droite", color: "#a855f7" },
+  { label: "Street",                 color: "#0ea5e9" }, // sky 500
+  { label: "Street Love",            color: "#ec4899" }, // pink 500
+  { label: "Club",                   color: "#f59e0b" }, // amber 500
+  { label: "Boom-bap old-school",    color: "#84cc16" }, // lime 500
+  { label: "Découpe new-school",     color: "#6366f1" }, // indigo 500
+  { label: "New-wave Electro-Pop",   color: "#06b6d4" }, // cyan 500
+  { label: "Arty",                   color: "#a855f7" }, // purple 500
+  { label: "Autre",                  color: "#94a3b8" }, // slate 400
 ];
 
 // Palette D (tuile): gris plus clair que le fond
