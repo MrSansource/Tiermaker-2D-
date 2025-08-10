@@ -756,7 +756,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
           </CardContent>
         </Card>
 
-        {/* Grid */
+        {/* Grid */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
           <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
