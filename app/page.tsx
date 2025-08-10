@@ -371,6 +371,10 @@ export default function TierList2D() {
   const [clickMode] = useState(true); // always click mode
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [seedInput, setSeedInput] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [loadingSeed, setLoadingSeed] = useState(false);
+  const [lastSeedId, setLastSeedId] = useState<string | null>(null);
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -388,6 +392,11 @@ export default function TierList2D() {
     useSensor(TouchSensor),
   );
 
+  // Load last used seed id (for convenience)
+  useEffect(() => {
+    try { const sid = localStorage.getItem("tier2d-last-seed-id"); if (sid) setLastSeedId(sid); } catch {}
+  }, []);
+
   // Persist
   useEffect(() => {
     try {
@@ -398,6 +407,16 @@ export default function TierList2D() {
       }
     } catch {}
   }, [state, autoSyncURL]);
+
+  // If URL has ?seed=XYZ on first load, fetch it
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const seed = url.searchParams.get('seed');
+      if (seed) { loadSeed(seed); }
+    } catch {}
+  }, []);
 
   // Dev self-tests (safe env checks)
   useEffect(() => {
@@ -529,8 +548,60 @@ export default function TierList2D() {
       const mig = migrateState(obj); if (mig) setState(mig);
     } catch { alert("Fichier invalide"); } }; reader.readAsText(file);
   }
-  function shareURL(copyOnly = true) { const enc = encodeState(state); if (!enc) return; const url = `${location.origin}${location.pathname}#${enc}`; navigator.clipboard?.writeText(url); if (!copyOnly) history.replaceState(null, "", `#${enc}`); alert("Lien copié dans le presse-papiers ✨"); }
+  function shareURL(copyOnly = true) {
+    const enc = encodeState(state); if (!enc) return;
+    const url = `${location.origin}${location.pathname}#${enc}`;
+    navigator.clipboard?.writeText(url);
+    if (!copyOnly) history.replaceState(null, "", `#${enc}`);
+    alert("Lien copié dans le presse-papiers ✨");
+  }
 
+  // --- Seed publishing (to Vercel Blob via API) ---
+  async function publishSeed(explicitId?: string) {
+    try {
+      setPublishing(true);
+      const encoded = encodeState(state);
+      const payload: any = { data: encoded };
+      if (explicitId && explicitId.trim()) payload.id = explicitId.trim();
+      const res = await fetch('/api/seed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const id: string = j.id;
+      setLastSeedId(id);
+      try { localStorage.setItem('tier2d-last-seed-id', id); } catch {}
+      const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
+      await navigator.clipboard?.writeText(share);
+      alert(`Seed publié !
+ID: ${id}
+Lien copié : ${share}`);
+    } catch (e: any) {
+      alert(`Échec publication du seed. ${e?.message || ''}
+As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
+    } finally { setPublishing(false); }
+  }
+
+  async function loadSeed(input: string) {
+    try {
+      setLoadingSeed(true);
+      let url = input.trim();
+      // autoriser collage direct de l'URL blob
+      if (!/^https?:\/\//i.test(url)) url = `/api/seed/${encodeURIComponent(url)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const dec = decodeState(j.data);
+      const mig = migrateState(dec);
+      if (mig) {
+        setState(mig);
+        if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
+        alert('Seed chargé ✔️');
+      } else {
+        alert('Seed invalide.');
+      }
+    } catch (e: any) {
+      alert(`Échec chargement du seed. ${e?.message || ''}`);
+    } finally { setLoadingSeed(false); }
+  }
   function importPairs() {
     const entries = parsePairs(pairsText); if (!entries.length) return;
     const items = { ...state.items }; const pool = [...(state.containers[state.poolId] || [])];
@@ -685,7 +756,7 @@ export default function TierList2D() {
           </CardContent>
         </Card>
 
-        {/* Grid */}
+        {/* Grid */
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
           <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
@@ -753,6 +824,29 @@ export default function TierList2D() {
           </DragOverlay>
         </DndContext>
 
+        {/* Seed sync (Vercel Blob) */}
+        <Card>
+          <CardHeader><CardTitle>Seed (sauvegarde cloud)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className={cx("text-sm", T.mutedText)}>
+              Publier ton état en un seed (ID) sauvegardé côté serveur, pour le recharger sur un autre appareil. Nécessite Vercel Blob configuré.
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <Input className={INPUT_DARK + " w-64"} placeholder="ID seed ou URL" value={seedInput} onChange={(e)=>setSeedInput(e.target.value)} />
+              <Button onClick={()=>publishSeed()} disabled={publishing}>{publishing?"Publication…":"Publier (nouveau seed)"}</Button>
+              {lastSeedId && (
+                <Button variant="outline" className={OUTLINE_DARK} onClick={()=>publishSeed(lastSeedId)} disabled={publishing} title="Réécrire le dernier seed publié">Mettre à jour le seed</Button>
+              )}
+              <Button variant="outline" className={OUTLINE_DARK} onClick={()=>loadSeed(seedInput)} disabled={loadingSeed}>{loadingSeed?"Chargement…":"Charger"}</Button>
+            </div>
+            {lastSeedId && (
+              <p className={cx("text-xs", T.mutedText)}>
+                Dernier seed utilisé : <code>{lastSeedId}</code> — Lien : {typeof window!=="undefined" && (<code>{`${location.origin}${location.pathname}?seed=${encodeURIComponent(lastSeedId)}`}</code>)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Import noms + images uniquement */}
         <Card>
           <CardHeader>
@@ -760,12 +854,16 @@ export default function TierList2D() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className={cx("text-sm", T.mutedText)}>
-              Une ligne par artiste. Formats acceptés : <code>Nom\tURL</code>, <code>Nom | URL</code>, <code>Nom,URL</code>, <code>Nom;URL</code>.
+              Une ligne par artiste. Formats acceptés : <code>Nom	URL</code>, <code>Nom | URL</code>, <code>Nom,URL</code>, <code>Nom;URL</code>.
             </p>
-            <Textarea className={cx("w-full resize-y", INPUT_DARK)} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg\nPNL | https://exemple.com/pnl.webp`} />
+            <Textarea className={cx("w-full resize-y", INPUT_DARK)} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.
+Nekfeu	https://exemple.com/nekfeu.jpg
+PNL | https://exemple.com/pnl.webp`} />
             <div className="flex gap-2">
               <Button onClick={importPairs}><Upload className="w-4 h-4 mr-2" />Ajouter au bac</Button>
-              <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}><Trash2 className="w-4 h-4 mr-2" />Vider la zone</Button>
+              <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+                <Trash2 className="w-4 h-4 mr-2" />Vider la zone
+              </Button>
             </div>
           </CardContent>
         </Card>
