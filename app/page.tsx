@@ -665,9 +665,9 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
   }, [selectedId]);
 
   // Grid template: header + dynamic cols (px)
-  const gridTemplate = {
-    gridTemplateColumns: `minmax(140px, max-content) ${state.colWidths.map((w)=>`${w}px`).join(" ")}`,
-  } as React.CSSProperties;
+  const colsPx = state.colWidths.map(w => String(w) + "px").join(" ");
+const gridTemplate: React.CSSProperties = { gridTemplateColumns: `minmax(140px, max-content) ${colsPx}` };
+
 
   // Pool filter
   const poolIds = state.containers[state.poolId] || [];
