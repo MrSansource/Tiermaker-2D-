@@ -141,6 +141,17 @@ const DARK = {
 const INPUT_DARK = "bg-zinc-800 text-zinc-100 border-zinc-700 placeholder:text-zinc-400";
 const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
 
+// 📝 EDIT TIPS TEXT HERE — Texte de l'encart rétractable (modifiable par vous)
+const INSTRUCTIONS: string[] = [
+  "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l’ordinateur ne supprime pas ces données.",
+  "Pour retrouver votre travail sur un autre appareil : utilisez la section ‘Seed (sauvegarde cloud)’.",
+  "1) Cliquez sur ‘Publier (nouveau seed)’ : un ID et un lien ?seed=… sont générés. Ajoutez ce lien en favoris ou partagez‑le.",
+  "2) Quand vous modifiez la tier list, cliquez sur ‘Mettre à jour le seed’ pour enregistrer la nouvelle version sous le même ID.",
+  "3) Si quelqu’un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer ‘Publier (nouveau seed)’ pour créer sa propre copie (son ID).",
+  "Astuce : le bouton ‘Partager le lien’ encode l’état DANS l’URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
+  "Pensez à exporter un JSON de sauvegarde de temps en temps (‘Exporter’)."
+];
+
 // =====================
 // Sortable tile (supports image)
 // =====================
@@ -375,6 +386,7 @@ export default function TierList2D() {
   const [publishing, setPublishing] = useState(false);
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [lastSeedId, setLastSeedId] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(true);
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -665,9 +677,9 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
   }, [selectedId]);
 
   // Grid template: header + dynamic cols (px)
-  const colsPx = state.colWidths.map(w => String(w) + "px").join(" ");
-const gridTemplate: React.CSSProperties = { gridTemplateColumns: `minmax(140px, max-content) ${colsPx}` };
-
+  const gridTemplate = {
+    gridTemplateColumns: `minmax(140px, max-content) ${state.colWidths.map((w)=>`${w}px`).join(" ")}`,
+  } as React.CSSProperties;
 
   // Pool filter
   const poolIds = state.containers[state.poolId] || [];
@@ -694,6 +706,23 @@ const gridTemplate: React.CSSProperties = { gridTemplateColumns: `minmax(140px, 
             {selectedId && (<Button variant="outline" className={OUTLINE_DARK} onClick={() => setSelectedId(null)} title="Annuler la sélection">Annuler sélection</Button>)}
           </div>
         </div>
+
+        {/* Encart consignes (rétractable) */}
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-2">
+            <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
+            <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowHelp(v => !v)}>
+              {showHelp ? "Masquer" : "Afficher"}
+            </Button>
+          </CardHeader>
+          {showHelp && (
+            <CardContent className="space-y-2">
+              {INSTRUCTIONS.map((line, i) => (
+                <p key={i} className={cx("text-sm", T.mutedText)}>{line}</p>
+              ))}
+            </CardContent>
+          )}
+        </Card>
 
         {/* Axes & options */}
         <Card>
