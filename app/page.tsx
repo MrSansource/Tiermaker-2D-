@@ -815,17 +815,27 @@ function importPairs() {
   }, [selectedId]);
 
   // Grid template: header + dynamic cols (px)
-  const gridTemplate = {
-    gridTemplateColumns: `minmax(140px, max-content) ${state.colWidths.map((w)=>`${w}px`).join(" ")}`,
-  } as React.CSSProperties;
+// === valeurs dérivées pour la grille & le bac ===
+const gridTemplate: React.CSSProperties = {
+  gridTemplateColumns:
+    "minmax(140px, max-content) " +
+    state.cols.map(() => "minmax(180px, 1fr)").join(" "),
+};
 
-  // Pool filter
-  const poolIds = state.containers[state.poolId] || [];
-  const filteredPoolIds = poolQuery ? poolIds.filter((id) => normalizeText(state.items[id]?.name || id).includes(normalizeText(poolQuery))) : poolIds;
+// pool + filtre
+const poolIds = state.containers[state.poolId] || [];
+const filteredPoolIds = poolQuery
+  ? poolIds.filter((id) =>
+      normalizeText(state.items[id]?.name || id).includes(
+        normalizeText(poolQuery)
+      )
+    )
+  : poolIds;
 
-  return (
-    <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
-      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+// IMPORTANT: point-virgule explicite pour éviter l'insertion automatique
+;return (
+  <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
+    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
           <div className="flex flex-wrap items-center gap-2">
