@@ -1261,7 +1261,7 @@ const filteredPoolIds = poolQuery
         {/* Panneau commentaire global */}
         {openCommentId && commentPos && state.items[openCommentId]?.comment && (
           <div
-            style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 color: '#0b0b0e' /* noir doux lisible */ }}
+            style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
             className="rounded-xl bg-white !text-black border border-zinc-300 shadow-xl ring-1 ring-black/5 isolate z-[1000] p-3 text-sm mix-blend-normal"
             onClick={(e) => e.stopPropagation()}
          
