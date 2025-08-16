@@ -1262,7 +1262,8 @@ const filteredPoolIds = poolQuery
         {openCommentId && commentPos && state.items[openCommentId]?.comment && (
           <div
             style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
-            className="rounded-xl bg-zinc-900/95 border border-zinc-700 p-3 text-sm shadow-2xl"
+            className="bg-white text-zinc-900 placeholder-zinc-500 border border-zinc-300 rounded-md px-2 py-1
+            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             onClick={(e) => e.stopPropagation()}
          
           >
