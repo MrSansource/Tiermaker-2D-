@@ -581,7 +581,7 @@ export default function TierList2D() {
     });
   }
 
-  function toggleCommentFor(id: string) {
+function toggleCommentFor(id: string) {
   if (openCommentId === id) {
     setOpenCommentId(null);
     setCommentPos(null);
@@ -589,20 +589,24 @@ export default function TierList2D() {
   }
   const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
   if (!el) return;
+
   const rect = el.getBoundingClientRect();
-  const tile = state.tileSize || 96;
-  const panelWidth = Math.min(tile * 2 + 24, 560); // ≈ 2 tuiles
   const gap = 8;
+  const width = Math.max(rect.width * 2 + 16, 280);
 
-  let left = rect.right + gap;
-  if (left + panelWidth > window.innerWidth - 8) {
-    left = rect.left - panelWidth - gap;
-  }
-  let top = Math.max(8, Math.min(rect.top, window.innerHeight - 120));
+  // Position “page” (et pas “viewport”) -> l’overlay défile avec la page
+  const leftCandidate = rect.right + window.scrollX + gap;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
+  const left = Math.min(leftCandidate, maxLeft);
 
-  setCommentPos({ top: Math.round(top), left: Math.round(left), width: panelWidth });
+  const topCandidate = rect.top + window.scrollY - 4;
+  const maxTop = window.scrollY + document.documentElement.clientHeight - 100; // petite marge
+  const top = Math.min(topCandidate, maxTop);
+
+  setCommentPos({ top, left, width });   // garde les mêmes clés que ton state actuel
   setOpenCommentId(id);
 }
+
 
 
   // DnD handlers (kept but optional)
@@ -1221,16 +1225,23 @@ const filteredPoolIds = poolQuery
                   />
                 ))}
               </div>
-            </SortableContext>
+            </SortableContext>  
           </CardContent>
         </Card>
 
         {/* Panneau commentaire global */}
         {openCommentId && commentPos && state.items[openCommentId]?.comment && (
           <div
-            style={{ position: "fixed", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
+            style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
             className="rounded-xl bg-zinc-900/95 border border-zinc-700 p-3 text-sm shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            useEffect(() => {
+  if (!openCommentId) return;
+  const onResize = () => toggleCommentFor(openCommentId);
+  window.addEventListener("resize", onResize);
+  return () => window.removeEventListener("resize", onResize);
+}, [openCommentId]);
+
           >
             <div className="flex justify-between items-start gap-2 mb-1">
               <div className="font-medium text-zinc-100">{state.items[openCommentId]?.name}</div>
