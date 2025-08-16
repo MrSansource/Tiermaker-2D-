@@ -1003,78 +1003,136 @@ const filteredPoolIds = poolQuery
 </div>
 
       {/* ====== Mode d'emploi / Seed ====== */}
-      {/* … ton encart … */}
+   {/* ====== Mode d'emploi / Sauvegarde & partage ====== */}
+<Card>
+  <CardHeader className="flex items-center justify-between gap-2">
+    <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
+    <Button
+      variant="outline"
+      className={OUTLINE_DARK}
+      size="sm"
+      onClick={() => setShowHelp(v => !v)}
+    >
+      {showHelp ? "Masquer" : "Afficher"}
+    </Button>
+  </CardHeader>
 
-      {/* ====== Axes & options (rétractable) ====== */}
-      <Card>
-        <CardHeader className="flex items-center justify-between gap-2">
-          <CardTitle>Axes & options</CardTitle>
-          <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowAxes(v => !v)}>
-            {showAxes && (
-  <CardContent className="space-y-4">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
-        <div className="space-y-2">
-          {state.rows.map((r, i) => (
-            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-              <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
-              <input
-                type="color"
-                value={r.color}
-                onChange={(e) => recolorRow(i, e.target.value)}
-                title="Couleur de la ligne"
-                className="h-10 w-12 rounded cursor-pointer border"
-              />
-              <div
-                className="px-3 py-2 rounded-md text-xs font-semibold text-center"
-                style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
-                title="Aperçu"
-              >
-                Aperçu
+  {showHelp && (
+    <CardContent className="space-y-4">
+      <ul className={cx("text-sm list-disc pl-5", T.mutedText)}>
+        {INSTRUCTIONS.map((t, i) => <li key={i}>{t}</li>)}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          className={INPUT_DARK + " w-56"}
+          placeholder="ID du seed ou URL"
+          value={seedInput}
+          onChange={(e) => setSeedInput(e.target.value)}
+        />
+        <Button variant="outline" className={OUTLINE_DARK} disabled={loadingSeed} onClick={() => loadSeed(seedInput)}>
+          {loadingSeed ? "Chargement…" : "Charger seed"}
+        </Button>
+        <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
+          {publishing ? "Publication…" : "Publier (nouveau seed)"}
+        </Button>
+        <Button
+          variant="outline"
+          className={OUTLINE_DARK}
+          disabled={publishing || !lastSeedId}
+          onClick={() => lastSeedId && publishSeed(lastSeedId)}
+          title={lastSeedId ? `Mettre à jour le seed ${lastSeedId}` : "Aucun seed chargé"}
+        >
+          {publishing ? "Mise à jour…" : "Mettre à jour le seed"}
+        </Button>
+        {lastSeedId && (
+          <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
+        )}
+      </div>
+    </CardContent>
+  )}
+</Card>
+
+
+     {/* ====== Axes & options (rétractable) ====== */}
+<Card>
+  <CardHeader className="flex items-center justify-between gap-2">
+    <CardTitle>Axes & options</CardTitle>
+    <Button
+      variant="outline"
+      className={OUTLINE_DARK}
+      size="sm"
+      onClick={() => setShowAxes(v => !v)}
+    >
+      {showAxes ? "Masquer" : "Afficher"}
+    </Button>
+  </CardHeader>
+
+  {showAxes && (
+    <CardContent className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
+          <div className="space-y-2">
+            {state.rows.map((r, i) => (
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
+                <input
+                  type="color"
+                  value={r.color}
+                  onChange={(e) => recolorRow(i, e.target.value)}
+                  title="Couleur de la ligne"
+                  className="h-10 w-12 rounded cursor-pointer border"
+                />
+                <div
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
+                  title="Aperçu"
+                >
+                  Aperçu
+                </div>
+                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
-              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-          <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
+            ))}
+            <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
+          </div>
+        </div>
+
+        <div>
+          <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
+          <div className="space-y-2">
+            {state.cols.map((c, i) => (
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
+                <input
+                  type="color"
+                  value={c.color}
+                  onChange={(e) => recolorCol(i, e.target.value)}
+                  title="Couleur de la colonne"
+                  className="h-10 w-12 rounded cursor-pointer border"
+                />
+                <div
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                  style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
+                  title="Aperçu"
+                >
+                  Aperçu
+                </div>
+                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
+          </div>
         </div>
       </div>
+    </CardContent>
+  )}
+</Card>
 
-      <div>
-        <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
-        <div className="space-y-2">
-          {state.cols.map((c, i) => (
-            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-              <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
-              <input
-                type="color"
-                value={c.color}
-                onChange={(e) => recolorCol(i, e.target.value)}
-                title="Couleur de la colonne"
-                className="h-10 w-12 rounded cursor-pointer border"
-              />
-              <div
-                className="px-3 py-2 rounded-md text-xs font-semibold text-center"
-                style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
-                title="Aperçu"
-              >
-                Aperçu
-              </div>
-              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-          <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
-        </div>
-      </div>
-    </div>
-  </CardContent>
-)}
-
-      </Card>
 
       {/* ====== Grille + Bac + Panneau commentaire ====== */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
@@ -1240,14 +1298,6 @@ PNL | https://exemple.com/pnl.webp`}
     </div>
   </CardContent>
 </Card>
-
-<div className={cx("text-xs", T.mutedText)}>
-  <p>
-    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
-    Pour un lien public stable, déployez ce fichier sur Vercel.
-  </p>
-</div>
-
           
       {/* … ta carte d’import … */}
 
