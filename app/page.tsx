@@ -684,6 +684,7 @@ function importPairs() {
       name,
       image: image,
       comment,
+    };
 
     pool.push(uid);
   }
