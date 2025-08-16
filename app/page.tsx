@@ -872,10 +872,10 @@ function clearPool() {
 
   // Grid template: header + dynamic cols (px)
 // === valeurs dérivées pour la grille & le bac ===
-const colsPx = (state.colWidths?.length
-  ? state.colWidths
-  : Array(state.cols.length).fill(220)
-).map((w) => `${w}px`).join(" ");
+// === derived values used by the render ===
+const colsPx = (state.colWidths?.length ? state.colWidths : Array(state.cols.length).fill(220))
+  .map((w) => `${w}px`)
+  .join(" ");
 
 const gridTemplate: React.CSSProperties = {
   gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
@@ -884,17 +884,14 @@ const gridTemplate: React.CSSProperties = {
 const poolIds = state.containers[state.poolId] || [];
 const filteredPoolIds = poolQuery
   ? poolIds.filter((id) =>
-      normalizeText(state.items[id]?.name || id).includes(
-        normalizeText(poolQuery)
-      )
+      normalizeText(state.items[id]?.name || id).includes(normalizeText(poolQuery))
     )
   : poolIds;
 
-// IMPORTANT : point-virgule explicite pour éviter l’ASI qui casse le return
-;return (
+// ---- build the JSX OUTSIDE the return to avoid parser confusion ----
+const __PAGE_BODY__ = (
   <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-
       {/* ====== Barre de titres + actions ====== */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
@@ -904,10 +901,10 @@ const filteredPoolIds = poolQuery
         </div>
       </div>
 
-      {/* ====== Mode d'emploi / Seed (ton encart existant) ====== */}
+      {/* ====== Mode d'emploi / Seed ====== */}
       {/* ... */}
 
-      {/* ====== Axes & options (avec showAxes) ====== */}
+      {/* ====== Axes & options (rétractable) ====== */}
       <Card>
         <CardHeader className="flex items-center justify-between gap-2">
           <CardTitle>Axes & options</CardTitle>
@@ -915,7 +912,7 @@ const filteredPoolIds = poolQuery
             variant="outline"
             className={OUTLINE_DARK}
             size="sm"
-            onClick={() => setShowAxes(v => !v)}
+            onClick={() => setShowAxes((v) => !v)}
           >
             {showAxes ? "Masquer" : "Afficher"}
           </Button>
@@ -923,8 +920,7 @@ const filteredPoolIds = poolQuery
 
         {showAxes && (
           <CardContent className="space-y-4">
-            {/* ---- ton contenu existant des axes (lignes/colonnes/couleurs, tailles, etc.) ---- */}
-            {/* ... */}
+            {/* … ton contenu existant (lignes/colonnes/couleurs/tailles) … */}
           </CardContent>
         )}
       </Card>
@@ -940,9 +936,7 @@ const filteredPoolIds = poolQuery
         {/* Grille */}
         <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
           <div className="grid gap-2 p-2" style={gridTemplate}>
-            {/* case vide en haut à gauche */}
-            <div />
-            {/* entêtes de colonnes */}
+            <div /> {/* coin haut-gauche */}
             {state.cols.map((c, ci) => (
               <div
                 key={`colh-${ci}`}
@@ -953,10 +947,8 @@ const filteredPoolIds = poolQuery
               </div>
             ))}
 
-            {/* lignes + cellules */}
             {state.rows.map((r, ri) => (
               <React.Fragment key={`row-${ri}`}>
-                {/* entête de ligne */}
                 <div
                   className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                   style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
@@ -1033,7 +1025,7 @@ const filteredPoolIds = poolQuery
           </CardContent>
         </Card>
 
-        {/* Panneau global de commentaire (flottant, un seul à la fois) */}
+        {/* Panneau commentaire global */}
         {openCommentId && commentPos && state.items[openCommentId]?.comment && (
           <div
             style={{ position: "fixed", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
@@ -1069,11 +1061,14 @@ const filteredPoolIds = poolQuery
       </DndContext>
 
       {/* ====== Import noms + images + commentaires ====== */}
-      {/* ... ta carte d’import existante ... */}
-
+      {/* … ta carte d’import existante … */}
     </div>
   </div>
 );
+
+// final return — now the parser only sees an identifier here
+return __PAGE_BODY__;
+
 
 
         {/* Seed sync (Vercel Blob) */}
