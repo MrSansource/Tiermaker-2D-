@@ -872,7 +872,7 @@ function clearPool() {
 
   // Grid template: header + dynamic cols (px)
 // === valeurs dérivées pour la grille & le bac ===
-// === derived values used by the render ===
+// === derived values used by the render (INSIDE the component) ===
 const colsPx = (state.colWidths?.length ? state.colWidths : Array(state.cols.length).fill(220))
   .map((w) => `${w}px`)
   .join(" ");
@@ -888,7 +888,7 @@ const filteredPoolIds = poolQuery
     )
   : poolIds;
 
-// ---- build the JSX OUTSIDE the return to avoid parser confusion ----
+// ---- build the JSX OUTSIDE the return to avoid parser confusion (STILL inside the function) ----
 const __PAGE_BODY__ = (
   <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
@@ -896,47 +896,34 @@ const __PAGE_BODY__ = (
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {/* tes boutons existants : Vider, Exporter, Importer, Partager, Réinitialiser, Recherche, Trouver, Effacer, etc. */}
-          {/* ... */}
+          {/* tes boutons existants */}
         </div>
       </div>
 
       {/* ====== Mode d'emploi / Seed ====== */}
-      {/* ... */}
+      {/* … ton encart … */}
 
       {/* ====== Axes & options (rétractable) ====== */}
       <Card>
         <CardHeader className="flex items-center justify-between gap-2">
           <CardTitle>Axes & options</CardTitle>
-          <Button
-            variant="outline"
-            className={OUTLINE_DARK}
-            size="sm"
-            onClick={() => setShowAxes((v) => !v)}
-          >
+          <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowAxes(v => !v)}>
             {showAxes ? "Masquer" : "Afficher"}
           </Button>
         </CardHeader>
-
         {showAxes && (
           <CardContent className="space-y-4">
-            {/* … ton contenu existant (lignes/colonnes/couleurs/tailles) … */}
+            {/* … contenu des axes … */}
           </CardContent>
         )}
       </Card>
 
       {/* ====== Grille + Bac + Panneau commentaire ====== */}
-      <DndContext
-        sensors={sensors}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        modifiers={[restrictToWindowEdges]}
-      >
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
         {/* Grille */}
         <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
           <div className="grid gap-2 p-2" style={gridTemplate}>
-            <div /> {/* coin haut-gauche */}
+            <div />
             {state.cols.map((c, ci) => (
               <div
                 key={`colh-${ci}`}
@@ -965,7 +952,6 @@ const __PAGE_BODY__ = (
                         <SortableContext items={items} strategy={rectSortingStrategy}>
                           <div
                             className="relative w-full flex flex-wrap gap-2"
-                            )}
                             style={{ minHeight: 120 }}
                             data-cell-id={id}
                           >
@@ -1058,87 +1044,20 @@ const __PAGE_BODY__ = (
         </DragOverlay>
       </DndContext>
 
-  
-      {/* … ta carte d’import existante … */}
-      {/* Seed sync (Vercel Blob) */}
-<Card>
-  <CardHeader>
-    <CardTitle>Seed (sauvegarde cloud)</CardTitle>
-  </CardHeader>
-  <CardContent className="space-y-3">
-    <p className={cx("text-sm", T.mutedText)}>
-      Publier ton état en un seed (ID) sauvegardé côté serveur, pour le recharger sur un autre appareil.
-      Nécessite Vercel Blob configuré.
-    </p>
-    <div className="flex flex-wrap gap-2 items-center">
-      <Input className={INPUT_DARK + " w-64"} placeholder="ID seed ou URL" value={seedInput} onChange={(e)=>setSeedInput(e.target.value)} />
-      <Button onClick={()=>publishSeed()} disabled={publishing}>
-        {publishing ? "Publication…" : "Publier (nouveau seed)"}
-      </Button>
-      {lastSeedId && (
-        <Button variant="outline" className={OUTLINE_DARK} onClick={()=>publishSeed(lastSeedId)} disabled={publishing} title="Réécrire le dernier seed publié">
-          Mettre à jour le seed
-        </Button>
-      )}
-      <Button variant="outline" className={OUTLINE_DARK} onClick={()=>loadSeed(seedInput)} disabled={loadingSeed}>
-        {loadingSeed ? "Chargement…" : "Charger"}
-      </Button>
-    </div>
-    {lastSeedId && (
-      <p className={cx("text-xs", T.mutedText)}>
-        Dernier seed utilisé : <code>{lastSeedId}</code> — Lien : {typeof window!=="undefined" && (<code>{`${location.origin}${location.pathname}?seed=${encodeURIComponent(lastSeedId)}`}</code>)}
-      </p>
-    )}
-  </CardContent>
-</Card>
+      {/* ====== Import noms + images + commentaires ====== */}
+      {/* … ta carte d’import … */}
 
-      {/* Importer noms + images + commentaires */}
-<Card>
-  <CardHeader>
-    <CardTitle>Importer noms + images + commentaires</CardTitle>
-  </CardHeader>
-  <CardContent className="space-y-3">
-    <p className={cx("text-sm", T.mutedText)}>
-      Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>, <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>, <code>Nom;URL;Commentaire</code>.
-      L’image et le commentaire sont optionnels.
-    </p>
-
-    <Textarea
-      className={cx("w-full resize-y", INPUT_DARK)}
-      rows={6}
-      value={pairsText}
-      onChange={(e) => setPairsText(e.target.value)}
-      placeholder={`Ex.
-Nekfeu	https://exemple.com/nekfeu.jpg Un court commentaire
-PNL | https://exemple.com/pnl.webp`}
-    />
-
-    <div className="flex gap-2">
-      <Button onClick={importPairs}>
-        <Upload className="w-4 h-4 mr-2" />
-        Ajouter au bac
-      </Button>
-      <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
-        <Trash2 className="w-4 h-4 mr-2" />
-        Vider la zone
-      </Button>
-    </div>
-  </CardContent>
-</Card>
-
-<div className={cx("text-xs", T.mutedText)}>
-  <p>
-    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
-    Pour un lien public stable, déployez ce fichier sur Vercel.
-  </p>
-</div>
-
-
+      <div className={cx("text-xs", T.mutedText)}>
+        <p>
+          Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
+          Pour un lien public stable, déployez ce fichier sur Vercel.
+        </p>
+      </div>
     </div>
   </div>
 );
 
-// final return — now the parser only sees an identifier here
+// final return — nothing after this
 return __PAGE_BODY__;
 }
 
