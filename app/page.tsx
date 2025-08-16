@@ -896,9 +896,110 @@ const __PAGE_BODY__ = (
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {/* tes boutons existants */}
-        </div>
-      </div>
+  <Button
+    variant="secondary"
+    onClick={() => {
+      const containers = Object.fromEntries(Object.keys(state.containers).map(k => [k, []]));
+      (containers as any)[state.poolId] = sortIdsAlpha(Object.values(state.containers).flat(), state.items);
+      setState(s => ({ ...s, containers: containers as any }));
+    }}
+    title="Tout renvoyer en bas"
+  >
+    <Scissors className="w-4 h-4 mr-2" /> Vider la grille
+  </Button>
+
+  <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'état en JSON">
+    <Download className="w-4 h-4 mr-2" /> Exporter
+  </Button>
+
+  <label className="inline-flex items-center gap-2 cursor-pointer">
+    <Upload className="w-4 h-4" />
+    <span className="text-sm">Importer .json</span>
+    <input
+      type="file"
+      accept="application/json"
+      className="hidden"
+      onChange={(e) => {
+        const f = (e.target as HTMLInputElement).files?.[0];
+        if (f) importStateFromFile(f);
+        (e.currentTarget as HTMLInputElement).value = "";
+      }}
+    />
+  </label>
+
+  <Button onClick={() => shareURL(false)} title="Mettre l'état dans l'URL et copier le lien">
+    <Link2 className="w-4 h-4 mr-2" /> Partager le lien
+  </Button>
+
+  <Button variant="destructive" onClick={resetAll} title="Réinitialiser complètement">
+    <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
+  </Button>
+
+  {/* Recherche + trouver + effacer */}
+  <Input
+    className={INPUT_DARK + " w-44"}
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Rechercher…"
+  />
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    onClick={() => {
+      const id = Array.from(matchedIds)[0];
+      if (!id) return;
+      const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }}
+  >
+    Trouver
+  </Button>
+  {search && (
+    <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
+      Effacer
+    </Button>
+  )}
+
+  <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+  {/* Commentaires + suppression tuile */}
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId}
+    onClick={() => selectedId && toggleCommentFor(selectedId)}
+  >
+    Ajouter / ouvrir un commentaire
+  </Button>
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId || !state.items[selectedId!]?.comment}
+    onClick={() => {
+      if (!selectedId) return;
+      setState(prev => {
+        const items = { ...prev.items };
+        if (items[selectedId]) {
+          items[selectedId] = { ...items[selectedId] };
+          delete items[selectedId].comment;
+        }
+        return { ...prev, items } as AppState;
+      });
+      if (openCommentId === selectedId) { setOpenCommentId(null); setCommentPos(null); }
+    }}
+  >
+    Supprimer le commentaire
+  </Button>
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId}
+    onClick={() => selectedId && deleteItem(selectedId)}
+  >
+    Supprimer la tuile
+  </Button>
+</div>
+</div>
 
       {/* ====== Mode d'emploi / Seed ====== */}
       {/* … ton encart … */}
@@ -908,14 +1009,70 @@ const __PAGE_BODY__ = (
         <CardHeader className="flex items-center justify-between gap-2">
           <CardTitle>Axes & options</CardTitle>
           <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowAxes(v => !v)}>
-            {showAxes ? "Masquer" : "Afficher"}
-          </Button>
-        </CardHeader>
-        {showAxes && (
-          <CardContent className="space-y-4">
-            {/* … contenu des axes … */}
-          </CardContent>
-        )}
+            {showAxes && (
+  <CardContent className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
+        <div className="space-y-2">
+          {state.rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+              <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
+              <input
+                type="color"
+                value={r.color}
+                onChange={(e) => recolorRow(i, e.target.value)}
+                title="Couleur de la ligne"
+                className="h-10 w-12 rounded cursor-pointer border"
+              />
+              <div
+                className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
+                title="Aperçu"
+              >
+                Aperçu
+              </div>
+              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
+        </div>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
+        <div className="space-y-2">
+          {state.cols.map((c, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+              <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
+              <input
+                type="color"
+                value={c.color}
+                onChange={(e) => recolorCol(i, e.target.value)}
+                title="Couleur de la colonne"
+                className="h-10 w-12 rounded cursor-pointer border"
+              />
+              <div
+                className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
+                title="Aperçu"
+              >
+                Aperçu
+              </div>
+              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
+        </div>
+      </div>
+    </div>
+  </CardContent>
+)}
+
       </Card>
 
       {/* ====== Grille + Bac + Panneau commentaire ====== */}
@@ -1044,7 +1201,53 @@ const __PAGE_BODY__ = (
         </DragOverlay>
       </DndContext>
 
+
+          
       {/* ====== Import noms + images + commentaires ====== */}
+<Card>
+  <CardHeader>
+    <CardTitle>Importer noms + images + commentaires</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <p className={cx("text-sm", T.mutedText)}>
+      Une ligne par artiste. Formats acceptés :{" "}
+      <code>Nom    URL    Commentaire</code>,{" "}
+      <code>Nom | URL | Commentaire</code>,{" "}
+      <code>Nom,URL,Commentaire</code>,{" "}
+      <code>Nom;URL;Commentaire</code>. L’image et le commentaire sont optionnels.
+    </p>
+
+    <Textarea
+      className={cx("w-full resize-y", INPUT_DARK)}
+      rows={6}
+      value={pairsText}
+      onChange={(e) => setPairsText(e.target.value)}
+      placeholder={`Ex.
+Nekfeu	https://exemple.com/nekfeu.jpg Un court commentaire
+PNL | https://exemple.com/pnl.webp`}
+    />
+
+    <div className="flex gap-2">
+      <Button onClick={importPairs}>
+        <Upload className="w-4 h-4 mr-2" />
+        Ajouter au bac
+      </Button>
+      <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+        <Trash2 className="w-4 h-4 mr-2" />
+        Vider la zone
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+
+<div className={cx("text-xs", T.mutedText)}>
+  <p>
+    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
+    Pour un lien public stable, déployez ce fichier sur Vercel.
+  </p>
+</div>
+
+          
       {/* … ta carte d’import … */}
 
       <div className={cx("text-xs", T.mutedText)}>
