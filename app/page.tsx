@@ -668,19 +668,35 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
       alert(`Échec chargement du seed. ${e?.message || ''}`);
     } finally { setLoadingSeed(false); }
   }
-  function importPairs() {
-    const entries = parsePairs(pairsText); if (!entries.length) return;
-    const items = { ...state.items }; const pool = [...(state.containers[state.poolId] || [])];
-    for (const { name, image, coment } of entries) {
-      const base = slug(name) || Math.random().toString(36).slice(2);
-      const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2,6)}` : base;
-      items[uid] = { id: uid, name, image: normalizeImageURL?.(image) ?? image, // si tu as une normalisation, sinon garde image
-      comment,                                     // <<--- important };
-      pool.push(uid);
-    }
-    setPairsText("");
-    setState((s)=> ({ ...s, items, containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) } }) );
+function importPairs() {
+  const entries = parsePairs(pairsText);
+  if (!entries.length) return;
+
+  const items = { ...state.items };
+  const pool = [...(state.containers[state.poolId] || [])];
+
+  for (const { name, image, comment } of entries) {
+    const base = slug(name) || Math.random().toString(36).slice(2);
+    const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+
+    items[uid] = {
+      id: uid,
+      name,
+      // si tu as une fonction normalizeImageURL définie quelque part, elle sera utilisée; sinon on garde l'URL telle quelle
+      image: (typeof normalizeImageURL === "function" ? normalizeImageURL(image) : image),
+      comment,
+
+    pool.push(uid);
   }
+
+  setPairsText("");
+  setState((s) => ({
+    ...s,
+    items,
+    containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) },
+  }));
+}
+
 
   const T = DARK; // always dark
 
