@@ -20,13 +20,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2 } from "lucide-react";
+import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X } from "lucide-react";
 
 // =====================
 // Types
 // =====================
 
-type Item = { id: string; name: string; image?: string };
+type Item = { id: string; name: string; image?: string; comment?: string };
 
 type Row = { label: string; color: string };
 type Col = { label: string; color: string };
@@ -117,15 +117,15 @@ function splitImport(text: string): string[] {
 }
 
 // Parse pairs lines: "Name<TAB/|/,/;>URL" → {name,image}
-function parsePairs(text: string): Array<{ name: string; image?: string }> {
+function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
   const lines = text.split(/\r?\n/g).map((l) => l.trim()).filter(Boolean);
-  const out: Array<{ name: string; image?: string }> = [];
+  const out: Array<{ name: string; image?: string; comment?: string }> = [];
   for (const line of lines) {
     const m = line.match(/https?:\/\/\S+/);
     if (m) {
       const url = m[0];
       const name = line.replace(url, "").split(/[|;,\t]/).join(" ").trim().replace(/\s{2,}/g, " ");
-      out.push({ name: name || url, image: url });
+      out.push({ name: name || url, image: url, comment: cleaned || undefined });
     } else {
       out.push({ name: line });
     }
@@ -163,8 +163,9 @@ const INSTRUCTIONS: string[] = [
 // =====================
 // Sortable tile (supports image)
 // =====================
-function Tile({ id, name, image, tileSize, selected, highlighted, onClick }: { id: string; name: string; image?: string; tileSize: number; selected?: boolean; highlighted?: boolean; onClick?: () => void }) {
+function Tile({ id, name, image, comment, tileSize, selected, highlighted, onClick }: { id: string; name: string; image?: string; comment?: string; tileSize: number; selected?: boolean; highlighted?: boolean; onClick?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const [openComment, setOpenComment] = React.useState(false);
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -206,6 +207,22 @@ function Tile({ id, name, image, tileSize, selected, highlighted, onClick }: { i
       ) : (
         <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
       )}
+      {comment && (
+  <button
+    onClick={(e) => { e.stopPropagation(); setOpenComment(v => !v); }}
+    className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
+    title={openComment ? "Masquer le commentaire" : "Afficher le commentaire"}
+  >
+    {openComment ? <X className="h-3.5 w-3.5 text-zinc-100" /> : <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />}
+  </button>
+)}
+{comment && openComment && (
+  <div className="absolute inset-1 rounded-xl bg-zinc-950/90 border border-zinc-700 p-2 text-[11px] leading-snug overflow-auto z-20">
+    <div className="mb-1 font-semibold text-zinc-100">Commentaire</div>
+    <div className="whitespace-pre-wrap text-zinc-200">{comment}</div>
+  </div>
+)}
+
     </motion.div>
   );
 }
@@ -345,9 +362,11 @@ function runSelfTests() {
   const s1 = splitImport("A,B;C\tD\nE\r\nF");
   assert("splitImport handles , ; \t and newlines", s1.join("|") === "A|B|C|D|E|F");
 
-  const pp = parsePairs("Alpha\thttp://x/a.jpg\nBeta | https://x/b.webp\nGamma");
+  const pp = parsePairs("Alpha\thttp://x/a.jpg\tPériode 2016-2019\nBeta | https://x/b.webp\nGamma");
   assert("parsePairs length", pp.length === 3);
   assert("parsePairs images detected", !!pp[0].image && !!pp[1].image && !pp[2].image);
+  assert("parsePairs comment captured", pp[0].comment === "Période 2016-2019");
+
 
   const st = stateFromEntries([{ name: "Alpha" }, { name: "Beta", image: "http://x/b.jpg" }]);
   assert("stateFromEntries pool size", (st.containers[st.poolId] || []).length === 2);
@@ -712,6 +731,38 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
             <Button variant="outline" className={OUTLINE_DARK} onClick={scrollToFirstMatch}>Trouver</Button>
             {search && (<Button variant="outline" className={OUTLINE_DARK} onClick={()=>setSearch("")}>Effacer</Button>)}
             {selectedId && (<Button variant="outline" className={OUTLINE_DARK} onClick={() => setSelectedId(null)} title="Annuler la sélection">Annuler sélection</Button>)}
+            <Button
+  variant="outline"
+  className={OUTLINE_DARK}
+  disabled={!selectedId}
+  onClick={() => {
+    if (!selectedId) return;
+    const cur = state.items[selectedId]?.comment || "";
+    const next = window.prompt(
+      `Commentaire pour "${state.items[selectedId]?.name || selectedId}"`,
+      cur
+    );
+    if (next === null) return;
+    setState(prev => {
+      const items = { ...prev.items };
+      items[selectedId] = { ...items[selectedId], comment: next.trim() || undefined };
+      return { ...prev, items } as AppState;
+    });
+  }}
+  title="Ajouter / éditer un commentaire"
+>
+  Ajouter un commentaire
+</Button>
+
+<Button
+  variant="outline"
+  className={OUTLINE_DARK}
+  disabled={!selectedId}
+  onClick={() => { if (selectedId) deleteItem(selectedId); }}
+  title="Supprimer la tuile (mobile)"
+>
+  Supprimer une tuile
+</Button>
           </div>
         </div>
 
@@ -817,7 +868,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
                             <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
                               <div className={cx("relative w-full flex flex-wrap gap-2")} style={{ minHeight: 120 }} data-cell-id={id}>
                                 {items.map((itemId) => (
-                                  <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
+                                  <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
                                 ))}
                               </div>
                             </SortableContext>
@@ -846,7 +897,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
                 <SortableContext id={state.poolId} items={filteredPoolIds} strategy={rectSortingStrategy}>
                   <div className="flex flex-wrap gap-2 p-2">
                     {filteredPoolIds.map((itemId) => (
-                      <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
+                      <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
                     ))}
                   </div>
                 </SortableContext>
@@ -856,7 +907,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
 
           <DragOverlay>
             {activeId ? (
-              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} tileSize={state.tileSize} />
+              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} />
             ) : null}
           </DragOverlay>
         </DndContext>
@@ -887,11 +938,11 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
         {/* Import noms + images uniquement */}
         <Card>
           <CardHeader>
-            <CardTitle>Importer noms + images</CardTitle>
+            <CardTitle>Importer noms + images + commentaires</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className={cx("text-sm", T.mutedText)}>
-              Une ligne par artiste. Formats acceptés : <code>Nom	URL</code>, <code>Nom | URL</code>, <code>Nom,URL</code>, <code>Nom;URL</code>.
+              Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>, <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>, <code>Nom;URL;Commentaire</code>. Un par ligne. L'image et le commentaire sont optionnels.
             </p>
             <Textarea className={cx("w-full resize-y", INPUT_DARK)} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.
 Nekfeu	https://exemple.com/nekfeu.jpg
