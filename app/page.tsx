@@ -619,20 +619,31 @@ export default function TierList2D() {
 }
   function handleDragStart(event: any) { setActiveId(event.active?.id ?? null); }
   function handleDragOver(event: any) {
-    const { active, over } = event; if (!over) return;
-    const activeId = active.id as string; const overId = over.id as string; if (overId === undefined) return;
-    const sourceContainer = getContainerByItem(activeId);
-    const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
-    if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
-    setState((prev) => {
-      const next = { ...prev, containers: { ...prev.containers } } as AppState;
-      const sourceItems = [...next.containers[sourceContainer]]; const destItems = [...next.containers[destContainer]];
-      const idx = sourceItems.indexOf(activeId); if (idx > -1) sourceItems.splice(idx, 1); destItems.push(activeId);
-      if (destContainer === next.poolId) {
-        const sorted = sortIdsAlpha(destItems, next.items);
-        destItems.length = 0; destItems.push(...sorted);
-      }
-      next.containers[sourceContainer] = sourceItems; next.containers[destContainer] = destItems; return next; }); }
+  const { active, over } = event; if (!over) return;
+  const activeId = active.id as string;
+  const overId = over.id as string; if (overId === undefined) return;
+
+  const sourceContainer = getContainerByItem(activeId);
+  const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
+  if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
+
+  setState((prev) => {
+    const next = { ...prev, containers: { ...prev.containers } } as AppState;
+    const sourceItems = [...(next.containers[sourceContainer] || [])];
+    const destItems   = [...(next.containers[destContainer]   || [])];
+
+    const idx = sourceItems.indexOf(activeId);
+    if (idx > -1) sourceItems.splice(idx, 1);
+    destItems.push(activeId);
+
+    next.containers[sourceContainer] = sourceItems;
+    next.containers[destContainer]   = (destContainer === next.poolId)
+      ? sortIdsAlpha(destItems, next.items)
+      : destItems;
+
+    return next;
+  });
+}
   function handleDragEnd(event: any) {
     const { active, over } = event; setActiveId(null); if (!over) return;
     const activeId = active.id as string; const overId = over.id as string;
@@ -659,13 +670,57 @@ export default function TierList2D() {
   function addCol() { setState((s) => ({ ...s, cols: [...s.cols, { label: `Colonne ${s.cols.length + 1}`, color: "#94a3b8" }], colWidths: [...s.colWidths, s.colWidths.at(-1) ?? 220] })); }
   function removeRow(i: number) { setState((s) => ({ ...s, rows: s.rows.filter((_, idx) => idx !== i) })); }
   function removeCol(i: number) { setState((s) => ({ ...s, cols: s.cols.filter((_, idx) => idx !== i), colWidths: s.colWidths.filter((_, idx) => idx !== i) })); }
-  function renameRow(i: number, v: string) { setState((s) => { const rows = [...s.rows]; rows[i] = { ...rows[i], label: v }; return { ...s, rows }; }); }
-  function recolorRow(i: number, v: string) { setState((s) => { const rows = [...s.rows]; rows[i] = { ...rows[i], color: v }; return { ...s, rows }; }); }
-  function renameCol(i: number, v: string) { setState((s) => { const cols = [...s.cols]; cols[i] = { ...cols[i], label: v }; return { ...s, cols }; }); }
-  function recolorCol(i: number, v: string) { setState((s) => { const cols = [...s.cols]; cols[i] = { ...cols[i], color: v }; return { ...s, cols }; }); }
-  function setColWidth(i: number, v: number) { setState((s) => { const cw = [...s.colWidths]; const w = Math.max(140, Math.min(560, Math.round(v))); cw[i] = w; return { ...s, colWidths: cw }; }); }
-  function applyColWidthAll(v: number) { setState((s) => ({ ...s, colWidths: Array(s.cols.length).fill(Math.max(140, Math.min(560, Math.round(v)))) })); }
-  function clearGridKeepItems() { setState((s) => { const containers = makeEmptyGrid(s.rows.length, s.cols.length); const allIds = Object.values(s.containers).flat(); containers[POOL_ID] = sortIdsAlpha(allIds, s.items); return { ...s, containers }; }); }
+  function renameRow(i: number, v: string) {
+  setState((s) => {
+    const rows = [...s.rows];
+    rows[i] = { ...rows[i], label: v };
+    return { ...s, rows };
+  });
+}
+function recolorRow(i: number, v: string) {
+  setState((s) => {
+    const rows = [...s.rows];
+    rows[i] = { ...rows[i], color: v };
+    return { ...s, rows };
+  });
+}
+function renameCol(i: number, v: string) {
+  setState((s) => {
+    const cols = [...s.cols];
+    cols[i] = { ...cols[i], label: v };
+    return { ...s, cols };
+  });
+}
+function recolorCol(i: number, v: string) {
+  setState((s) => {
+    const cols = [...s.cols];
+    cols[i] = { ...cols[i], color: v };
+    return { ...s, cols };
+  });
+}
+function setColWidth(i: number, v: number) {
+  setState((s) => {
+    const cw = [...s.colWidths];
+    const w = Math.max(140, Math.min(560, Math.round(v)));
+    cw[i] = w;
+    return { ...s, colWidths: cw };
+  });
+}
+function applyColWidthAll(v: number) {
+  setState((s) => ({
+    ...s,
+    colWidths: Array(s.cols.length).fill(Math.max(140, Math.min(560, Math.round(v)))),
+  }));
+}
+function clearGridKeepItems() {
+  setState((s) => {
+    const containers = makeEmptyGrid(s.rows.length, s.cols.length);
+    const allIds = Object.values(s.containers).flat();
+    containers[POOL_ID] = sortIdsAlpha(allIds, s.items);
+    return { ...s, containers };
+  });
+}
+
   function resetAll() { setState(stateFromNames([])); history.replaceState(null, "", "#"); }
   function exportState() { try { const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "tierlist2d_state.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); } catch { alert("Export impossible dans cet environnement."); } }
   function importStateFromFile(file: File) {
@@ -766,31 +821,33 @@ function importPairs() {
   const T = DARK; // always dark
 
   function deleteItem(id: string) {
-    setState((prev) => {
-      const containers = { ...prev.containers };
-      for (const [cid, arr] of Object.entries(containers)) {
-        const idx = arr.indexOf(id);
-        if (idx > -1) {
-          const clone = [...arr];
-          clone.splice(idx, 1);
-          containers[cid] = clone;
-        }
+  setState((prev) => {
+    const containers = { ...prev.containers };
+    for (const [cid, arr] of Object.entries(containers)) {
+      const idx = arr.indexOf(id);
+      if (idx > -1) {
+        const clone = [...arr];
+        clone.splice(idx, 1);
+        containers[cid] = clone;
       }
-      const items = { ...prev.items };
-      delete items[id];
-      return { ...prev, containers, items } as AppState;
-    });
-    if (selectedId === id) setSelectedId(null);
-    if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
-  }
-  function clearPool() {
-    setState((prev) => {
-      const pool = prev.containers[prev.poolId] || [];
-      const items = { ...prev.items };
-      for (const id of pool) delete items[id];
-      return { ...prev, items, containers: { ...prev.containers, [prev.poolId]: [] } } as AppState;
-    });
-  }
+    }
+    const items = { ...prev.items };
+    delete items[id];
+    return { ...prev, containers, items } as AppState;
+  });
+  if (selectedId === id) setSelectedId(null);
+  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
+}
+
+function clearPool() {
+  setState((prev) => {
+    const pool = prev.containers[prev.poolId] || [];
+    const items = { ...prev.items };
+    for (const id of pool) delete items[id];
+    return { ...prev, items, containers: { ...prev.containers, [prev.poolId]: [] } } as AppState;
+  });
+}
+
   function scrollToFirstMatch() {
     const id = Array.from(matchedIds)[0];
     if (!id) return;
