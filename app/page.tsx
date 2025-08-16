@@ -1060,53 +1060,49 @@ const __PAGE_BODY__ = (
         </DragOverlay>
       </DndContext>
 
-      {/* ====== Import noms + images + commentaires ====== */}
+  
       {/* … ta carte d’import existante … */}
+      {/* Seed sync (Vercel Blob) */}
+<Card>
+  <CardHeader>
+    <CardTitle>Seed (sauvegarde cloud)</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <p className={cx("text-sm", T.mutedText)}>
+      Publier ton état en un seed (ID) sauvegardé côté serveur, pour le recharger sur un autre appareil.
+      Nécessite Vercel Blob configuré.
+    </p>
+    <div className="flex flex-wrap gap-2 items-center">
+      <Input className={INPUT_DARK + " w-64"} placeholder="ID seed ou URL" value={seedInput} onChange={(e)=>setSeedInput(e.target.value)} />
+      <Button onClick={()=>publishSeed()} disabled={publishing}>
+        {publishing ? "Publication…" : "Publier (nouveau seed)"}
+      </Button>
+      {lastSeedId && (
+        <Button variant="outline" className={OUTLINE_DARK} onClick={()=>publishSeed(lastSeedId)} disabled={publishing} title="Réécrire le dernier seed publié">
+          Mettre à jour le seed
+        </Button>
+      )}
+      <Button variant="outline" className={OUTLINE_DARK} onClick={()=>loadSeed(seedInput)} disabled={loadingSeed}>
+        {loadingSeed ? "Chargement…" : "Charger"}
+      </Button>
     </div>
-  </div>
-);
+    {lastSeedId && (
+      <p className={cx("text-xs", T.mutedText)}>
+        Dernier seed utilisé : <code>{lastSeedId}</code> — Lien : {typeof window!=="undefined" && (<code>{`${location.origin}${location.pathname}?seed=${encodeURIComponent(lastSeedId)}`}</code>)}
+      </p>
+    )}
+  </CardContent>
+</Card>
 
-// final return — now the parser only sees an identifier here
-return __PAGE_BODY__;
-
-
-        {/* Seed sync (Vercel Blob) */}
-        <Card>
-          <CardHeader><CardTitle>Seed (sauvegarde cloud)</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <p className={cx("text-sm", T.mutedText)}>
-              Publier ton état en un seed (ID) sauvegardé côté serveur, pour le recharger sur un autre appareil. Nécessite Vercel Blob configuré.
-            </p>
-            <div className="flex flex-wrap gap-2 items-center">
-              <Input className={INPUT_DARK + " w-64"} placeholder="ID seed ou URL" value={seedInput} onChange={(e)=>setSeedInput(e.target.value)} />
-              <Button onClick={()=>publishSeed()} disabled={publishing}>{publishing?"Publication…":"Publier (nouveau seed)"}</Button>
-              {lastSeedId && (
-                <Button variant="outline" className={OUTLINE_DARK} onClick={()=>publishSeed(lastSeedId)} disabled={publishing} title="Réécrire le dernier seed publié">Mettre à jour le seed</Button>
-              )}
-              <Button variant="outline" className={OUTLINE_DARK} onClick={()=>loadSeed(seedInput)} disabled={loadingSeed}>{loadingSeed?"Chargement…":"Charger"}</Button>
-            </div>
-            {lastSeedId && (
-              <p className={cx("text-xs", T.mutedText)}>
-                Dernier seed utilisé : <code>{lastSeedId}</code> — Lien : {typeof window!=="undefined" && (<code>{`${location.origin}${location.pathname}?seed=${encodeURIComponent(lastSeedId)}`}</code>)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Import noms + images uniquement */}
-        <Card>
-          <CardHeader>
-            <Card>
+      {/* Importer noms + images + commentaires */}
+<Card>
   <CardHeader>
     <CardTitle>Importer noms + images + commentaires</CardTitle>
   </CardHeader>
   <CardContent className="space-y-3">
     <p className={cx("text-sm", T.mutedText)}>
-      Une ligne par artiste. Formats acceptés :{" "}
-      <code>Nom    URL    Commentaire</code>,{" "}
-      <code>Nom | URL | Commentaire</code>,{" "}
-      <code>Nom,URL,Commentaire</code>,{" "}
-      <code>Nom;URL;Commentaire</code>. Un par ligne. L'image et le commentaire sont optionnels.
+      Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>, <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>, <code>Nom;URL;Commentaire</code>.
+      L’image et le commentaire sont optionnels.
     </p>
 
     <Textarea
@@ -1134,11 +1130,17 @@ PNL | https://exemple.com/pnl.webp`}
 
 <div className={cx("text-xs", T.mutedText)}>
   <p>
-    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le
-    lien »). Pour un lien public stable, déployez ce fichier sur Vercel.
+    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
+    Pour un lien public stable, déployez ce fichier sur Vercel.
   </p>
 </div>
-      </div>
+
+
     </div>
-  );
+  </div>
+);
+
+// final return — now the parser only sees an identifier here
+return __PAGE_BODY__;
 }
+
