@@ -335,18 +335,6 @@ function stateFromNames(names: string[]): AppState {
   };
 }
 
-function deleteCommentById(id: string) {
-  setState(prev => {
-    const items = { ...prev.items };
-    if (items[id]) {
-      items[id] = { ...items[id] };
-      delete items[id].comment;
-    }
-    return { ...prev, items } as AppState;
-  });
-  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
-}
-
 
 function stateFromEntries(entries: Array<{ name: string; image?: string; id?: string }>): AppState {
   const items: Record<string, Item> = {};
@@ -618,6 +606,17 @@ export default function TierList2D() {
 
 
   // DnD handlers (kept but optional)
+  function deleteCommentById(id: string) {
+  setState(prev => {
+    const items = { ...prev.items };
+    if (items[id]) {
+      items[id] = { ...items[id] };
+      delete items[id].comment;
+    }
+    return { ...prev, items } as AppState;
+  });
+  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
+}
   function handleDragStart(event: any) { setActiveId(event.active?.id ?? null); }
   function handleDragOver(event: any) {
     const { active, over } = event; if (!over) return;
