@@ -559,6 +559,35 @@ export default function TierList2D() {
     });
   }, [state.rows.length, state.cols.length]);
 
+  useEffect(() => {
+  if (!openCommentId) return;
+
+  const recalc = () => {
+    const id = openCommentId;
+    const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const width = Math.max(rect.width * 2 + 16, 280);
+
+    const leftCandidate = rect.right + window.scrollX + gap;
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
+    const left = Math.min(leftCandidate, maxLeft);
+
+    const topCandidate = rect.top + window.scrollY - 4;
+    const maxTop = window.scrollY + document.documentElement.clientHeight - 100;
+    const top = Math.min(topCandidate, maxTop);
+
+    setCommentPos({ top, left, width });
+  };
+
+  // on recalcule à l’ouverture et lors des resize
+  recalc();
+  window.addEventListener("resize", recalc);
+  return () => window.removeEventListener("resize", recalc);
+}, [openCommentId]);
+
   const getContainerByItem = (itemId: string) => {
     for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
     return null;
@@ -1235,13 +1264,7 @@ const filteredPoolIds = poolQuery
             style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
             className="rounded-xl bg-zinc-900/95 border border-zinc-700 p-3 text-sm shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            useEffect(() => {
-  if (!openCommentId) return;
-  const onResize = () => toggleCommentFor(openCommentId);
-  window.addEventListener("resize", onResize);
-  return () => window.removeEventListener("resize", onResize);
-}, [openCommentId]);
-
+         
           >
             <div className="flex justify-between items-start gap-2 mb-1">
               <div className="font-medium text-zinc-100">{state.items[openCommentId]?.name}</div>
