@@ -682,8 +682,7 @@ function importPairs() {
     items[uid] = {
       id: uid,
       name,
-      // si tu as une fonction normalizeImageURL définie quelque part, elle sera utilisée; sinon on garde l'URL telle quelle
-      image: (typeof normalizeImageURL === "function" ? normalizeImageURL(image) : image),
+      image: image,
       comment,
 
     pool.push(uid);
