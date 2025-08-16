@@ -964,9 +964,7 @@ const __PAGE_BODY__ = (
                       <CardContent className={cx("p-2", T.cardBg)}>
                         <SortableContext items={items} strategy={rectSortingStrategy}>
                           <div
-                            className={cx(
-                              "relative w-full flex flex-wrap gap-2",
-                              state.wrapMode === "width" && "whitespace-nowrap overflow-x-auto",
+                            className="relative w-full flex flex-wrap gap-2"
                             )}
                             style={{ minHeight: 120 }}
                             data-cell-id={id}
