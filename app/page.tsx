@@ -819,7 +819,7 @@ function importPairs() {
 const colsPx = (state.colWidths?.length
   ? state.colWidths
   : Array(state.cols.length).fill(220)
-).map(w => `${w}px`).join(' ');
+).map((w) => `${w}px`).join(" ");
 
 const gridTemplate: React.CSSProperties = {
   gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
@@ -838,227 +838,187 @@ const filteredPoolIds = poolQuery
 ;return (
   <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={clearGridKeepItems} title="Tout renvoyer en bas"><Scissors className="w-4 h-4 mr-2" /> Vider la grille</Button>
-            <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'état en JSON"><Download className="w-4 h-4 mr-2" /> Exporter</Button>
-            <label className="inline-flex items-center gap-2 cursor-pointer">
-              <Upload className="w-4 h-4" />
-              <span className="text-sm">Importer .json</span>
-              <input type="file" accept="application/json" className="hidden" onChange={(e)=>{ const f = e.target.files?.[0]; if (f) importStateFromFile(f); (e.currentTarget as HTMLInputElement).value = ""; }} />
-            </label>
-            <Button onClick={() => shareURL(false)} title="Mettre l'état dans l'URL et copier le lien"><Link2 className="w-4 h-4 mr-2" /> Partager le lien</Button>
-            <Button variant="destructive" onClick={resetAll} title="Réinitialiser complètement"><RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser</Button>
-            <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Rechercher…" className={cx("w-44", INPUT_DARK)} />
-            <Button variant="outline" className={OUTLINE_DARK} onClick={scrollToFirstMatch}>Trouver</Button>
-            {search && (<Button variant="outline" className={OUTLINE_DARK} onClick={()=>setSearch("")}>Effacer</Button>)}
-            <Button
-  variant="outline"
-  className={OUTLINE_DARK}
-  disabled={!selectedId}
-  onClick={() => {
-    if (!selectedId) return;
-    const cur = state.items[selectedId]?.comment || "";
-    const next = window.prompt(
-      `Commentaire pour "${state.items[selectedId]?.name || selectedId}"`,
-      cur
-    );
-    if (next === null) return;
-    setState(prev => {
-      const items = { ...prev.items };
-      items[selectedId] = { ...items[selectedId], comment: next.trim() || undefined };
-      return { ...prev, items } as AppState;
-    });
-  }}
-  title="Ajouter / éditer un commentaire"
->
-  Ajouter un commentaire
-</Button>
 
-            
-<Button
-  variant="outline"
-  className={OUTLINE_DARK}
-  disabled={!selectedId || !state.items[selectedId]?.comment}
-  onClick={() => { if (selectedId) deleteCommentById(selectedId); }}
-  title="Supprimer le commentaire de la tuile sélectionnée"
->
-  Supprimer le commentaire
-</Button>
+      {/* ====== Barre de titres + actions ====== */}
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* tes boutons existants : Vider, Exporter, Importer, Partager, Réinitialiser, Recherche, Trouver, Effacer, etc. */}
+          {/* ... */}
+        </div>
+      </div>
 
+      {/* ====== Mode d'emploi / Seed (ton encart existant) ====== */}
+      {/* ... */}
 
-<Button
-  variant="outline"
-  className={OUTLINE_DARK}
-  disabled={!selectedId}
-  onClick={() => { if (selectedId) deleteItem(selectedId); }}
-  title="Supprimer la tuile (mobile)"
->
-  Supprimer une tuile
-</Button>
+      {/* ====== Axes & options (avec showAxes) ====== */}
+      <Card>
+        <CardHeader className="flex items-center justify-between gap-2">
+          <CardTitle>Axes & options</CardTitle>
+          <Button
+            variant="outline"
+            className={OUTLINE_DARK}
+            size="sm"
+            onClick={() => setShowAxes(v => !v)}
+          >
+            {showAxes ? "Masquer" : "Afficher"}
+          </Button>
+        </CardHeader>
+
+        {showAxes && (
+          <CardContent className="space-y-4">
+            {/* ---- ton contenu existant des axes (lignes/colonnes/couleurs, tailles, etc.) ---- */}
+            {/* ... */}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ====== Grille + Bac + Panneau commentaire ====== */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        modifiers={[restrictToWindowEdges]}
+      >
+        {/* Grille */}
+        <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
+          <div className="grid gap-2 p-2" style={gridTemplate}>
+            {/* case vide en haut à gauche */}
+            <div />
+            {/* entêtes de colonnes */}
+            {state.cols.map((c, ci) => (
+              <div
+                key={`colh-${ci}`}
+                className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
+              >
+                {c.label}
+              </div>
+            ))}
+
+            {/* lignes + cellules */}
+            {state.rows.map((r, ri) => (
+              <React.Fragment key={`row-${ri}`}>
+                {/* entête de ligne */}
+                <div
+                  className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
+                >
+                  {r.label}
+                </div>
+
+                {state.cols.map((_, ci) => {
+                  const id = `r${ri}-c${ci}`;
+                  const items = state.containers[id] || [];
+                  return (
+                    <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                      <CardContent className={cx("p-2", T.cardBg)}>
+                        <SortableContext items={items} strategy={rectSortingStrategy}>
+                          <div
+                            className={cx(
+                              "relative w-full flex flex-wrap gap-2",
+                              state.wrapMode === "width" && "whitespace-nowrap overflow-x-auto",
+                            )}
+                            style={{ minHeight: 120 }}
+                            data-cell-id={id}
+                          >
+                            {items.map((itemId) => (
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </React.Fragment>
+            ))}
           </div>
         </div>
 
-        {/* Encart consignes (rétractable) */}
+        {/* Bac */}
         <Card>
-          <CardHeader className="flex items-center justify-between gap-2">
-            <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
-            <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowHelp(v => !v)}>
-              {showHelp ? "Masquer" : "Afficher"}
-            </Button>
+          <CardHeader>
+            <CardTitle>Bac (non classés)</CardTitle>
           </CardHeader>
-          {showHelp && (
-            <CardContent className="space-y-2">
-              {INSTRUCTIONS.map((line, i) => (
-                <p key={i} className={cx("text-sm", T.mutedText)}>{line}</p>
-              ))}
-            </CardContent>
-          )}
-        </Card>
-
-        {/* Axes & options */}
-        <Card>
-       <CardHeader className="flex items-center justify-between gap-2">
-  <CardTitle>Axes & options</CardTitle>
-  <Button
-    variant="outline"
-    className={OUTLINE_DARK}
-    size="sm"
-    onClick={() => setShowAxes(v => !v)}
-  >
-    {showAxes ? "Masquer" : "Afficher"}
-  </Button>
-</CardHeader>
-
-{showAxes && (
-  <CardContent className="space-y-4">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
-        <div className="space-y-2">
-          {state.rows.map((r, i) => (
-            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-              <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
-              <input type="color" value={r.color} onChange={(e) => recolorRow(i, e.target.value)} title="Couleur de la ligne" className="h-10 w-12 rounded cursor-pointer border" />
-              <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: r.color, color: textColorForBg(r.color) }} title="Aperçu">Aperçu</div>
-              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne"><Trash2 className="w-4 h-4" /></Button>
-            </div>
-          ))}
-          <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
-        </div>
-      </div>
-
-      <div>
-        <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
-        <div className="space-y-2">
-          {state.cols.map((c, i) => (
-            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-              <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
-              <input type="color" value={c.color} onChange={(e) => recolorCol(i, e.target.value)} title="Couleur de la colonne" className="h-10 w-12 rounded cursor-pointer border" />
-              <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: c.color, color: textColorForBg(c.color) }} title="Aperçu">Aperçu</div>
-              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne"><Trash2 className="w-4 h-4" /></Button>
-            </div>
-          ))}
-          <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
-        </div>
-      </div>
-    </div>
-  </CardContent>
-)}
-
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-              <div className="space-y-2">
-                <Label>Taille des tuiles (px)</Label>
-                <Input className={INPUT_DARK} type="number" min={60} max={200} value={state.tileSize} onChange={(e) => setState((s) => ({ ...s, tileSize: Math.max(60, Math.min(200, Number(e.target.value) || 96)) }))} />
+          <CardContent className={T.cardBg}>
+            <SortableContext items={filteredPoolIds} strategy={rectSortingStrategy}>
+              <div className="flex flex-wrap gap-2 p-2">
+                {filteredPoolIds.map((itemId) => (
+                  <Tile
+                    key={itemId}
+                    id={itemId}
+                    name={state.items[itemId]?.name ?? itemId}
+                    image={state.items[itemId]?.image}
+                    comment={state.items[itemId]?.comment}
+                    tileSize={state.tileSize}
+                    selected={selectedId === itemId}
+                    highlighted={matchedIds.has(itemId)}
+                    onClick={() => setSelectedId(itemId)}
+                    isCommentOpen={openCommentId === itemId}
+                    onCommentToggle={toggleCommentFor}
+                  />
+                ))}
               </div>
-              <div className="space-y-2">
-                <Label>Largeur des colonnes (glisser pour toutes)</Label>
-                <input type="range" min={140} max={560} value={state.colWidths[0] ?? 220} onChange={(e)=>applyColWidthAll(Number(e.target.value)||220)} className="w-full" />
-              </div>
-              <div className="space-y-2">
-                <Label>Largeur par colonne (px)</Label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {state.cols.map((c, i)=> (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs whitespace-nowrap">{c.label}</span>
-                      <Input className={INPUT_DARK} type="number" min={140} max={560} value={state.colWidths[i] ?? 220} onChange={(e)=>setColWidth(i, Number(e.target.value)||220)} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </SortableContext>
           </CardContent>
         </Card>
 
-        {/* Grid */}
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
-          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
-            <div className="grid gap-2 p-2" style={gridTemplate}>
-              {/* top-left empty */}
-              <div />
-              {/* Column headers */}
-              {state.cols.map((c, ci) => (
-                <div key={`colh-${ci}`} className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)} style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}>{c.label}</div>
-              ))}
-
-              {/* Rows */}
-              {state.rows.map((r, ri) => (
-                <React.Fragment key={`row-${ri}`}>
-                  <div className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)} style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}>{r.label}</div>
-                  {state.cols.map((_, ci) => {
-                    const id = `r${ri}-c${ci}`; const items = state.containers[id] || [];
-                    return (
-                      <Card key={id} className={cx("w-full h-full border", T.cardBorder, T.cardBg)}>
-                        <CardContent className={cx("p-2", T.cardBg)}>
-                          <Droppable id={id} onClick={() => selectedId && (moveToContainer(selectedId, id), setSelectedId(null))}>
-                            <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
-                              <div className={cx("relative w-full flex flex-wrap gap-2")} style={{ minHeight: 120 }} data-cell-id={id}>
-                                {items.map((itemId) => (
-                                  <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
-                                ))}
-                              </div>
-                            </SortableContext>
-                          </Droppable>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+        {/* Panneau global de commentaire (flottant, un seul à la fois) */}
+        {openCommentId && commentPos && state.items[openCommentId]?.comment && (
+          <div
+            style={{ position: "fixed", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
+            className="rounded-xl bg-zinc-900/95 border border-zinc-700 p-3 text-sm shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start gap-2 mb-1">
+              <div className="font-medium text-zinc-100">{state.items[openCommentId]?.name}</div>
+              <button onClick={() => { setOpenCommentId(null); setCommentPos(null); }} title="Fermer">
+                <X className="w-4 h-4 text-zinc-300" />
+              </button>
+            </div>
+            <div className="whitespace-pre-wrap text-zinc-200">
+              {state.items[openCommentId]?.comment}
             </div>
           </div>
+        )}
 
-          {/* Pool / Bac */}
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle>Bac (non classés)</CardTitle>
-              <Button variant="destructive" size="sm" onClick={clearPool}><Trash2 className="w-4 h-4 mr-1" /> Vider le bac</Button>
-            </CardHeader>
-            <CardContent className={T.cardBg}>
-              <div className="flex items-center gap-2 mb-2">
-                <Input value={poolQuery} onChange={(e) => setPoolQuery(e.target.value)} placeholder="Filtrer le bac…" className={cx("max-w-sm", INPUT_DARK)} />
-                {poolQuery && (<Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setPoolQuery("")}>Effacer</Button>)}
-              </div>
-              <Droppable id={state.poolId} onClick={() => selectedId && (moveToContainer(selectedId, state.poolId), setSelectedId(null))}>
-                <SortableContext id={state.poolId} items={filteredPoolIds} strategy={rectSortingStrategy}>
-                  <div className="flex flex-wrap gap-2 p-2">
-                    {filteredPoolIds.map((itemId) => (
-                      <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
-                    ))}
-                  </div>
-                </SortableContext>
-              </Droppable>
-            </CardContent>
-          </Card>
+        {/* Drag overlay */}
+        <DragOverlay>
+          {activeId ? (
+            <Tile
+              id={activeId}
+              name={state.items[activeId]?.name ?? ""}
+              image={state.items[activeId]?.image}
+              comment={state.items[activeId]?.comment}
+              tileSize={state.tileSize}
+              isCommentOpen={openCommentId === activeId}
+              onCommentToggle={toggleCommentFor}
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
-          <DragOverlay>
-            {activeId ? (
-              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[activeId]?.comment} tileSize={state.tileSize} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+      {/* ====== Import noms + images + commentaires ====== */}
+      {/* ... ta carte d’import existante ... */}
+
+    </div>
+  </div>
+);
+
 
         {/* Seed sync (Vercel Blob) */}
         <Card>
