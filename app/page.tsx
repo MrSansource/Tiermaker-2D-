@@ -1067,7 +1067,7 @@ const __PAGE_BODY__ = (
 );
 
 // final return — now the parser only sees an identifier here
-return __PAGE_BODY__;
+return __PAGE_BODY__;²
 
 
 
@@ -1097,29 +1097,48 @@ return __PAGE_BODY__;
         {/* Import noms + images uniquement */}
         <Card>
           <CardHeader>
-            <CardTitle>Importer noms + images + commentaires</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className={cx("text-sm", T.mutedText)}>
-              Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>, <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>, <code>Nom;URL;Commentaire</code>. Un par ligne. L'image et le commentaire sont optionnels.
-            </p>
-            <Textarea className={cx("w-full resize-y", INPUT_DARK)} rows={6} value={pairsText} onChange={(e)=>setPairsText(e.target.value)} placeholder={`Ex.
-Nekfeu	https://exemple.com/nekfeu.jpg
-PNL | https://exemple.com/pnl.webp`} />
-            <div className="flex gap-2">
-              <Button onClick={importPairs}><Upload className="w-4 h-4 mr-2" />Ajouter au bac</Button>
-              <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
-                <Trash2 className="w-4 h-4 mr-2" />Vider la zone
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+  <CardHeader>
+    <CardTitle>Importer noms + images + commentaires</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <p className={cx("text-sm", T.mutedText)}>
+      Une ligne par artiste. Formats acceptés :{" "}
+      <code>Nom    URL    Commentaire</code>,{" "}
+      <code>Nom | URL | Commentaire</code>,{" "}
+      <code>Nom,URL,Commentaire</code>,{" "}
+      <code>Nom;URL;Commentaire</code>. Un par ligne. L'image et le commentaire sont optionnels.
+    </p>
 
-        <div className={cx("text-xs", T.mutedText)}>
-          <p>
-            Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »). Pour un lien public stable, déployez ce fichier sur GitHub Pages / Netlify / Vercel.
-          </p>
-        </div>
+    <Textarea
+      className={cx("w-full resize-y", INPUT_DARK)}
+      rows={6}
+      value={pairsText}
+      onChange={(e) => setPairsText(e.target.value)}
+      placeholder={`Ex.
+Nekfeu	https://exemple.com/nekfeu.jpg Un court commentaire
+PNL | https://exemple.com/pnl.webp`}
+    />
+
+    <div className="flex gap-2">
+      <Button onClick={importPairs}>
+        <Upload className="w-4 h-4 mr-2" />
+        Ajouter au bac
+      </Button>
+      <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+        <Trash2 className="w-4 h-4 mr-2" />
+        Vider la zone
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+
+<div className={cx("text-xs", T.mutedText)}>
+  <p>
+    Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le
+    lien »). Pour un lien public stable, déployez ce fichier sur Vercel.
+  </p>
+</div>
       </div>
     </div>
   );
