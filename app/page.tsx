@@ -951,7 +951,7 @@ function importPairs() {
 
           <DragOverlay>
             {activeId ? (
-              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} />
+              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[activeId]?.comment} tileSize={state.tileSize} />
             ) : null}
           </DragOverlay>
         </DndContext>
