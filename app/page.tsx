@@ -816,13 +816,15 @@ function importPairs() {
 
   // Grid template: header + dynamic cols (px)
 // === valeurs dérivées pour la grille & le bac ===
+const colsPx = (state.colWidths?.length
+  ? state.colWidths
+  : Array(state.cols.length).fill(220)
+).map(w => `${w}px`).join(' ');
+
 const gridTemplate: React.CSSProperties = {
-  gridTemplateColumns:
-    "minmax(140px, max-content) " +
-    state.cols.map(() => "minmax(180px, 1fr)").join(" "),
+  gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
 };
 
-// pool + filtre
 const poolIds = state.containers[state.poolId] || [];
 const filteredPoolIds = poolQuery
   ? poolIds.filter((id) =>
@@ -832,7 +834,7 @@ const filteredPoolIds = poolQuery
     )
   : poolIds;
 
-// IMPORTANT: point-virgule explicite pour éviter l'insertion automatique
+// IMPORTANT : point-virgule explicite pour éviter l’ASI qui casse le return
 ;return (
   <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
