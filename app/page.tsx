@@ -116,18 +116,45 @@ function splitImport(text: string): string[] {
     .filter(Boolean);
 }
 
-// Parse pairs lines: "Name<TAB/|/,/;>URL" → {name,image}
+// Parse "Nom  URL  Commentaire" (séparateurs: tab | , ; ou juste espaces)
+// - URL détectée via /https?:\/\/\S+/
+// - Tout ce qui suit l'URL devient le commentaire (nettoyé)
+// - S'il n'y a pas d'URL: on prend la 1re partie comme nom, le reste (si présent) comme commentaire
 function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
-  const lines = text.split(/\r?\n/g).map((l) => l.trim()).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: Array<{ name: string; image?: string; comment?: string }> = [];
+
   for (const line of lines) {
     const m = line.match(/https?:\/\/\S+/);
     if (m) {
       const url = m[0];
-      const name = line.replace(url, "").split(/[|;,\t]/).join(" ").trim().replace(/\s{2,}/g, " ");
+      const before = line.slice(0, (m.index as number)).trim();
+      const name = before
+        .split(/[|;,\t]/)
+        .join(" ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      const after = line.slice((m.index as number) + url.length);
+      let cleaned = after.trim();
+      while (
+        cleaned.startsWith("|") ||
+        cleaned.startsWith(",") ||
+        cleaned.startsWith(";") ||
+        cleaned.startsWith(":") ||
+        cleaned.startsWith("-") ||
+        cleaned.startsWith("–") ||
+        cleaned.startsWith("—")
+      ) {
+        cleaned = cleaned.slice(1).trim();
+      }
+
       out.push({ name: name || url, image: url, comment: cleaned || undefined });
     } else {
-      out.push({ name: line });
+      const parts = line.split(/[|;,\t]/);
+      const name = (parts[0] || "").trim();
+      const comment = parts.slice(1).join(" ").replace(/\s{2,}/g, " ").trim();
+      out.push({ name: name || line, comment: comment || undefined });
     }
   }
   return out;
@@ -644,10 +671,11 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
   function importPairs() {
     const entries = parsePairs(pairsText); if (!entries.length) return;
     const items = { ...state.items }; const pool = [...(state.containers[state.poolId] || [])];
-    for (const { name, image } of entries) {
+    for (const { name, image, coment } of entries) {
       const base = slug(name) || Math.random().toString(36).slice(2);
       const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2,6)}` : base;
-      items[uid] = { id: uid, name, image };
+      items[uid] = { id: uid, name, image: normalizeImageURL?.(image) ?? image, // si tu as une normalisation, sinon garde image
+      comment,                                     // <<--- important };
       pool.push(uid);
     }
     setPairsText("");
