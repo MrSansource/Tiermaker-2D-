@@ -1067,8 +1067,7 @@ const __PAGE_BODY__ = (
 );
 
 // final return — now the parser only sees an identifier here
-return __PAGE_BODY__;²
-
+return __PAGE_BODY__;
 
 
         {/* Seed sync (Vercel Blob) */}
