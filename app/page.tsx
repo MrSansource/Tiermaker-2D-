@@ -188,11 +188,33 @@ const INSTRUCTIONS: string[] = [
 ];
 
 // =====================
-// Sortable tile (supports image)
+// Sortable tile (image + bouton commentaire discret)
 // =====================
-function Tile({ id, name, image, comment, tileSize, selected, highlighted, onClick }: { id: string; name: string; image?: string; comment?: string; tileSize: number; selected?: boolean; highlighted?: boolean; onClick?: () => void }) {
+function Tile({
+  id,
+  name,
+  image,
+  comment,
+  tileSize,
+  selected,
+  highlighted,
+  onClick,
+  isCommentOpen,
+  onCommentToggle,
+}: {
+  id: string;
+  name: string;
+  image?: string;
+  comment?: string;
+  tileSize: number;
+  selected?: boolean;
+  highlighted?: boolean;
+  onClick?: () => void;
+  isCommentOpen?: boolean;
+  onCommentToggle?: (id: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-  const [openComment, setOpenComment] = React.useState(false);
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -200,6 +222,7 @@ function Tile({ id, name, image, comment, tileSize, selected, highlighted, onCli
     height: tileSize,
     touchAction: "none",
   };
+
   return (
     <motion.div
       ref={setNodeRef}
@@ -209,14 +232,12 @@ function Tile({ id, name, image, comment, tileSize, selected, highlighted, onCli
       onClick={onClick}
       className={cx(
         "relative overflow-hidden select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
-        selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : "",
-        "text-zinc-100",
+        "bg-zinc-900 border-zinc-700 text-zinc-100",
+        selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : ""
       )}
       {...attributes}
       {...listeners}
     >
-      {/* fond + bordure palette D */}
-      <div className="absolute inset-0 rounded-2xl" style={{ backgroundColor: TILE_BG, border: `1px solid ${TILE_BORDER}` }} />
       {image ? (
         <>
           <img
@@ -225,7 +246,9 @@ function Tile({ id, name, image, comment, tileSize, selected, highlighted, onCli
             referrerPolicy="no-referrer"
             loading="lazy"
             className="absolute inset-0 w-full h-full object-cover rounded-2xl"
-            onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
           />
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
             <span className="font-semibold text-white drop-shadow-sm px-1">{name}</span>
@@ -234,25 +257,28 @@ function Tile({ id, name, image, comment, tileSize, selected, highlighted, onCli
       ) : (
         <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
       )}
-      {comment && (
-  <button
-    onClick={(e) => { e.stopPropagation(); setOpenComment(v => !v); }}
-    className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
-    title={openComment ? "Masquer le commentaire" : "Afficher le commentaire"}
-  >
-    {openComment ? <X className="h-3.5 w-3.5 text-zinc-100" /> : <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />}
-  </button>
-)}
-{comment && openComment && (
-  <div className="absolute inset-1 rounded-xl bg-zinc-950/90 border border-zinc-700 p-2 text-[11px] leading-snug overflow-auto z-20">
-    <div className="mb-1 font-semibold text-zinc-100">Commentaire</div>
-    <div className="whitespace-pre-wrap text-zinc-200">{comment}</div>
-  </div>
-)}
 
+      {/* Bouton discret pour ouvrir/fermer le panneau global de commentaire */}
+      {comment && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onCommentToggle?.(id);
+          }}
+          className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
+          title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
+        >
+          {isCommentOpen ? (
+            <X className="h-3.5 w-3.5 text-zinc-100" />
+          ) : (
+            <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />
+          )}
+        </button>
+      )}
     </motion.div>
   );
 }
+
 
 // =====================
 // Droppable wrapper (click-to-place supported)
@@ -308,6 +334,19 @@ function stateFromNames(names: string[]): AppState {
     forceDark: true,
   };
 }
+
+function deleteCommentById(id: string) {
+  setState(prev => {
+    const items = { ...prev.items };
+    if (items[id]) {
+      items[id] = { ...items[id] };
+      delete items[id].comment;
+    }
+    return { ...prev, items } as AppState;
+  });
+  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
+}
+
 
 function stateFromEntries(entries: Array<{ name: string; image?: string; id?: string }>): AppState {
   const items: Record<string, Item> = {};
@@ -441,6 +480,9 @@ export default function TierList2D() {
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [lastSeedId, setLastSeedId] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(true);
+  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
+  const [commentPos, setCommentPos] = useState<{top:number; left:number; width:number} | null>(null);
+  const [showAxes, setShowAxes] = useState(true);
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -550,6 +592,30 @@ export default function TierList2D() {
       return next;
     });
   }
+
+  function toggleCommentFor(id: string) {
+  if (openCommentId === id) {
+    setOpenCommentId(null);
+    setCommentPos(null);
+    return;
+  }
+  const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const tile = state.tileSize || 96;
+  const panelWidth = Math.min(tile * 2 + 24, 560); // ≈ 2 tuiles
+  const gap = 8;
+
+  let left = rect.right + gap;
+  if (left + panelWidth > window.innerWidth - 8) {
+    left = rect.left - panelWidth - gap;
+  }
+  let top = Math.max(8, Math.min(rect.top, window.innerHeight - 120));
+
+  setCommentPos({ top: Math.round(top), left: Math.round(left), width: panelWidth });
+  setOpenCommentId(id);
+}
+
 
   // DnD handlers (kept but optional)
   function handleDragStart(event: any) { setActiveId(event.active?.id ?? null); }
@@ -716,6 +782,7 @@ function importPairs() {
       return { ...prev, containers, items } as AppState;
     });
     if (selectedId === id) setSelectedId(null);
+    if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
   }
   function clearPool() {
     setState((prev) => {
@@ -774,7 +841,6 @@ function importPairs() {
             <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Rechercher…" className={cx("w-44", INPUT_DARK)} />
             <Button variant="outline" className={OUTLINE_DARK} onClick={scrollToFirstMatch}>Trouver</Button>
             {search && (<Button variant="outline" className={OUTLINE_DARK} onClick={()=>setSearch("")}>Effacer</Button>)}
-            {selectedId && (<Button variant="outline" className={OUTLINE_DARK} onClick={() => setSelectedId(null)} title="Annuler la sélection">Annuler sélection</Button>)}
             <Button
   variant="outline"
   className={OUTLINE_DARK}
@@ -797,6 +863,18 @@ function importPairs() {
 >
   Ajouter un commentaire
 </Button>
+
+            
+<Button
+  variant="outline"
+  className={OUTLINE_DARK}
+  disabled={!selectedId || !state.items[selectedId]?.comment}
+  onClick={() => { if (selectedId) deleteCommentById(selectedId); }}
+  title="Supprimer le commentaire de la tuile sélectionnée"
+>
+  Supprimer le commentaire
+</Button>
+
 
 <Button
   variant="outline"
@@ -829,40 +907,54 @@ function importPairs() {
 
         {/* Axes & options */}
         <Card>
-          <CardHeader>
-            <CardTitle>Axes & options</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
-                <div className="space-y-2">
-                  {state.rows.map((r, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-                      <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
-                      <input type="color" value={r.color} onChange={(e) => recolorRow(i, e.target.value)} title="Couleur de la ligne" className="h-10 w-12 rounded cursor-pointer border" />
-                      <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: r.color, color: textColorForBg(r.color) }} title="Aperçu">Aperçu</div>
-                      <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne"><Trash2 className="w-4 h-4" /></Button>
-                    </div>
-                  ))}
-                  <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
-                </div>
-              </div>
-              <div>
-                <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
-                <div className="space-y-2">
-                  {state.cols.map((c, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-                      <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
-                      <input type="color" value={c.color} onChange={(e) => recolorCol(i, e.target.value)} title="Couleur de la colonne" className="h-10 w-12 rounded cursor-pointer border" />
-                      <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: c.color, color: textColorForBg(c.color) }} title="Aperçu">Aperçu</div>
-                      <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne"><Trash2 className="w-4 h-4" /></Button>
-                    </div>
-                  ))}
-                  <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
-                </div>
-              </div>
+       <CardHeader className="flex items-center justify-between gap-2">
+  <CardTitle>Axes & options</CardTitle>
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    size="sm"
+    onClick={() => setShowAxes(v => !v)}
+  >
+    {showAxes ? "Masquer" : "Afficher"}
+  </Button>
+</CardHeader>
+
+{showAxes && (
+  <CardContent className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
+        <div className="space-y-2">
+          {state.rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+              <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
+              <input type="color" value={r.color} onChange={(e) => recolorRow(i, e.target.value)} title="Couleur de la ligne" className="h-10 w-12 rounded cursor-pointer border" />
+              <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: r.color, color: textColorForBg(r.color) }} title="Aperçu">Aperçu</div>
+              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne"><Trash2 className="w-4 h-4" /></Button>
             </div>
+          ))}
+          <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
+        </div>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
+        <div className="space-y-2">
+          {state.cols.map((c, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+              <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
+              <input type="color" value={c.color} onChange={(e) => recolorCol(i, e.target.value)} title="Couleur de la colonne" className="h-10 w-12 rounded cursor-pointer border" />
+              <div className="px-3 py-2 rounded-md text-xs font-semibold text-center" style={{ backgroundColor: c.color, color: textColorForBg(c.color) }} title="Aperçu">Aperçu</div>
+              <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne"><Trash2 className="w-4 h-4" /></Button>
+            </div>
+          ))}
+          <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
+        </div>
+      </div>
+    </div>
+  </CardContent>
+)}
+
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
               <div className="space-y-2">
@@ -912,7 +1004,7 @@ function importPairs() {
                             <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
                               <div className={cx("relative w-full flex flex-wrap gap-2")} style={{ minHeight: 120 }} data-cell-id={id}>
                                 {items.map((itemId) => (
-                                  <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
+                                  <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
                                 ))}
                               </div>
                             </SortableContext>
@@ -941,7 +1033,7 @@ function importPairs() {
                 <SortableContext id={state.poolId} items={filteredPoolIds} strategy={rectSortingStrategy}>
                   <div className="flex flex-wrap gap-2 p-2">
                     {filteredPoolIds.map((itemId) => (
-                      <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} />
+                      <Tile key={itemId} id={itemId} name={state.items[itemId]?.name ?? itemId} image={state.items[itemId]?.image} comment={state.items[itemId]?.comment} tileSize={state.tileSize} selected={selectedId===itemId} highlighted={matchedIds.has(itemId)} onClick={() => setSelectedId(itemId)} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
                     ))}
                   </div>
                 </SortableContext>
@@ -951,7 +1043,7 @@ function importPairs() {
 
           <DragOverlay>
             {activeId ? (
-              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[activeId]?.comment} tileSize={state.tileSize} />
+              <Tile id={activeId} name={state.items[activeId]?.name ?? ""} image={state.items[activeId]?.image} comment={state.items[activeId]?.comment} tileSize={state.tileSize} isCommentOpen={openCommentId===itemId} onCommentToggle={toggleCommentFor} />
             ) : null}
           </DragOverlay>
         </DndContext>
