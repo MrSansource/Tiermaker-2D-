@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X } from "lucide-react";
+import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Pencil, Check } from "lucide-react";
 
 // =====================
 // Types
@@ -471,6 +471,9 @@ export default function TierList2D() {
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [commentPos, setCommentPos] = useState<{top:number; left:number; width:number} | null>(null);
   const [showAxes, setShowAxes] = useState(true);
+  const [isEditingComment, setIsEditingComment] = useState(false);
+  const [draftComment, setDraftComment] = useState("");
+  const commentRef = useRef<HTMLDivElement | null>(null);
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -503,6 +506,67 @@ export default function TierList2D() {
       }
     } catch {}
   }, [state, autoSyncURL]);
+
+  // (1) Quand on ouvre un commentaire, préparer le brouillon et sortir du mode édition
+useEffect(() => {
+  if (!openCommentId) return;
+  setIsEditingComment(false);
+  setDraftComment(state.items[openCommentId]?.comment ?? "");
+}, [openCommentId, state.items]);
+
+// (2) Fermer le panneau si on clique en dehors
+useEffect(() => {
+  if (!openCommentId) return;
+
+  const onDown = (e: MouseEvent) => {
+    if (commentRef.current && !commentRef.current.contains(e.target as Node)) {
+      setOpenCommentId(null);
+      setCommentPos(null);
+      setIsEditingComment(false);
+    }
+  };
+
+  // capture=true pour passer avant d'éventuels stopPropagation
+  document.addEventListener("mousedown", onDown, true);
+  return () => document.removeEventListener("mousedown", onDown, true);
+}, [openCommentId]);
+
+// (3) Recalculer la position du panneau au resize/scroll (si tu ne l'as pas déjà)
+useEffect(() => {
+  if (!openCommentId) return;
+
+  const recalc = () => {
+    const el = document.querySelector(
+      `[data-item-id="${openCommentId}"]`
+    ) as HTMLElement | null;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const width = Math.max(rect.width * 2 + 16, 280);
+
+    // coordonnées viewport (panneau en position: fixed)
+    const left = Math.min(
+      rect.right + gap,
+      document.documentElement.clientWidth - width - 12
+    );
+    const top = Math.min(
+      rect.top - 4,
+      document.documentElement.clientHeight - 100
+    );
+
+    setCommentPos({ top, left, width });
+  };
+
+  recalc();
+  window.addEventListener("resize", recalc);
+  window.addEventListener("scroll", recalc, { passive: true });
+  return () => {
+    window.removeEventListener("resize", recalc);
+    window.removeEventListener("scroll", recalc);
+  };
+}, [openCommentId]);
+
 
   // If URL has ?seed=XYZ on first load, fetch it
   useEffect(() => {
@@ -1281,32 +1345,98 @@ const filteredPoolIds = poolQuery
         </Card>
 
         {/* Panneau commentaire global */}
-       {openCommentId && commentPos && state.items[openCommentId]?.comment && (
+     {openCommentId && commentPos && (
   <div
+    ref={commentRef}
     style={{
       position: "fixed",
       top: commentPos.top,
       left: commentPos.left,
       width: commentPos.width,
-      zIndex: 1000
+      zIndex: 1000,
     }}
-    className="rounded-xl bg-white border border-zinc-300 p-3 text-sm shadow-2xl ring-1 ring-black/5"
+    className="rounded-xl bg-white text-zinc-900 border border-zinc-300 p-3 text-sm shadow-2xl ring-1 ring-black/5"
     onClick={(e) => e.stopPropagation()}
   >
-    <div className="flex justify-between items-start gap-2 mb-1">
-      <div className="font-medium text-zinc-900">
+    <div className="flex justify-between items-start gap-2 mb-2">
+      <div className="font-medium truncate pr-2">
         {state.items[openCommentId]?.name}
       </div>
-      <button
-        onClick={() => { setOpenCommentId(null); setCommentPos(null); }}
-        title="Fermer"
-      >
-        <X className="w-4 h-4 text-zinc-700" />
-      </button>
+
+      <div className="flex items-center gap-1">
+        {!isEditingComment ? (
+          <button
+            title="Éditer le commentaire"
+            className="p-1 rounded hover:bg-zinc-100"
+            onClick={() => {
+              setDraftComment(state.items[openCommentId!]?.comment ?? "");
+              setIsEditingComment(true);
+            }}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        ) : (
+          <>
+            <button
+              title="Enregistrer"
+              className="p-1 rounded hover:bg-green-50"
+              onClick={() => {
+                const id = openCommentId!;
+                const newText = draftComment.trim();
+                setState((s) => {
+                  const it = s.items[id];
+                  if (!it) return s;
+                  return {
+                    ...s,
+                    items: {
+                      ...s.items,
+                      [id]: { ...it, comment: newText || undefined },
+                    },
+                  };
+                });
+                setIsEditingComment(false);
+              }}
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              title="Annuler"
+              className="p-1 rounded hover:bg-zinc-100"
+              onClick={() => {
+                setDraftComment(state.items[openCommentId!]?.comment ?? "");
+                setIsEditingComment(false);
+              }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        <button
+          title="Fermer"
+          className="p-1 rounded hover:bg-zinc-100"
+          onClick={() => { setOpenCommentId(null); setCommentPos(null); setIsEditingComment(false); }}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
     </div>
-    <div className="whitespace-pre-wrap text-zinc-700">
-      {state.items[openCommentId]?.comment}
-    </div>
+
+    {!isEditingComment ? (
+      <div className="whitespace-pre-wrap text-zinc-700">
+        {state.items[openCommentId]?.comment || <span className="text-zinc-400">Aucun commentaire.</span>}
+      </div>
+    ) : (
+      <textarea
+        rows={5}
+        value={draftComment}
+        onChange={(e) => setDraftComment(e.target.value)}
+        className="w-full rounded-md border border-zinc-300 bg-white text-zinc-900 px-2 py-1 text-sm
+                   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        placeholder="Écris ton commentaire ici…"
+        autoFocus
+      />
+    )}
   </div>
 )}
 
