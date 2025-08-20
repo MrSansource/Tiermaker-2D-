@@ -1,4 +1,1365 @@
-{/* Bac */}
+'use client';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+} from "@dnd-kit/core";
+import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
+import { motion } from "framer-motion";
+import LZString from "lz-string";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Pencil, Check } from "lucide-react";
+
+// =====================
+// Types
+// =====================
+
+type Item = { id: string; name: string; image?: string; comment?: string };
+
+type Row = { label: string; color: string };
+type Col = { label: string; color: string };
+
+type AppState = {
+  rows: Row[];
+  cols: Col[];
+  colWidths: number[]; // px per column
+  containers: Record<string, string[]>; // containerId -> item ids
+  items: Record<string, Item>; // id -> item
+  poolId: string; // id of the pool container
+  tileSize: number; // px
+  forceDark: boolean; // theme (always true)
+};
+
+// =====================
+// Utils
+// =====================
+
+const POOL_ID = "__pool__";
+
+const DEFAULT_ROWS: Row[] = [
+   { label: "GOATS",       color: "#f59e0b" }, // amber 500 (or) â€” gold
+  { label: "Excellent",   color: "#22c55e" }, // green 500
+  { label: "Bon",         color: "#06b6d4" }, // cyan 500
+  { label: "Moyen plus",  color: "#3b82f6" }, // blue 500
+  { label: "Moyen",       color: "#a855f7" }, // purple 500
+  { label: "Mauvais",     color: "#f97316" }, // orange 500
+  { label: "Trash",       color: "#ef4444" }, // red 500
+];
+const DEFAULT_COLS: Col[] = [
+  { label: "Street",                 color: "#0ea5e9" }, // sky 500
+  { label: "Street Love",            color: "#ec4899" }, // pink 500
+  { label: "Club",                   color: "#f59e0b" }, // amber 500
+  { label: "Boom-bap old-school",    color: "#84cc16" }, // lime 500
+  { label: "DÃ©coupe new-school",     color: "#6366f1" }, // indigo 500
+  { label: "New-wave Electro-Pop",   color: "#06b6d4" }, // cyan 500
+  { label: "Arty",                   color: "#a855f7" }, // purple 500
+  { label: "Autre",                  color: "#94a3b8" }, // slate 400
+];
+
+// Palette D (tuile): gris plus clair que le fond
+const TILE_BG = "#23242a"; // lÃ©gÃ¨rement plus clair que bg gÃ©nÃ©ral
+const TILE_BORDER = "#3f3f46"; // gris mÃ©dian
+
+// Remove diacritics & make a slug
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+
+function normalizeText(s: string) {
+  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "");
+}
+
+// Alpha sorting helper for pool (French collator, accent-insensitive)
+const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
+function sortIdsAlpha(ids: string[], items: Record<string, Item>) {
+  return [...ids].sort((a, b) => collator.compare(
+    normalizeText(items[a]?.name || a),
+    normalizeText(items[b]?.name || b)
+  ));
+}
+
+function textColorForBg(hex: string) {
+  try {
+    let c = hex.replace("#", "");
+    if (c.length === 3) c = c.split("").map((x) => x + x).join("");
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq >= 140 ? "#111827" : "#FFFFFF";
+  } catch {
+    return "#FFFFFF";
+  }
+}
+
+function splitImport(text: string): string[] {
+  return text
+    .split(/\r?\n|,|;|\t/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Parse "Nom  URL  Commentaire" (sÃ©parateurs: tab | , ; ou juste espaces)
+// - URL dÃ©tectÃ©e via /https?:\/\/\S+/
+// - Tout ce qui suit l'URL devient le commentaire (nettoyÃ©)
+// - S'il n'y a pas d'URL: on prend la 1re partie comme nom, le reste (si prÃ©sent) comme commentaire
+function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out: Array<{ name: string; image?: string; comment?: string }> = [];
+
+  for (const line of lines) {
+    const m = line.match(/https?:\/\/\S+/);
+    if (m) {
+      const url = m[0];
+      const before = line.slice(0, (m.index as number)).trim();
+      const name = before
+        .split(/[|;,\t]/)
+        .join(" ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      const after = line.slice((m.index as number) + url.length);
+      let cleaned = after.trim();
+      while (
+        cleaned.startsWith("|") ||
+        cleaned.startsWith(",") ||
+        cleaned.startsWith(";") ||
+        cleaned.startsWith(":") ||
+        cleaned.startsWith("-") ||
+        cleaned.startsWith("â€“") ||
+        cleaned.startsWith("â€”")
+      ) {
+        cleaned = cleaned.slice(1).trim();
+      }
+
+      out.push({ name: name || url, image: url, comment: cleaned || undefined });
+    } else {
+      const parts = line.split(/[|;,\t]/);
+      const name = (parts[0] || "").trim();
+      const comment = parts.slice(1).join(" ").replace(/\s{2,}/g, " ").trim();
+      out.push({ name: name || line, comment: comment || undefined });
+    }
+  }
+  return out;
+}
+
+function cx(...cls: Array<string | false | null | undefined>) {
+  return cls.filter(Boolean).join(" ");
+}
+
+const DARK = {
+  pageBg: "bg-zinc-950",
+  pageText: "text-zinc-50",
+  cardBg: "bg-zinc-900",
+  cardBorder: "border-zinc-800",
+  mutedText: "text-zinc-400",
+};
+
+// Dark UI utilities
+const INPUT_DARK = "bg-zinc-800 text-zinc-100 border-zinc-700 placeholder:text-zinc-400";
+const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
+
+// ðŸ“ EDIT TIPS TEXT HERE â€” Texte de l'encart rÃ©tractable (modifiable par vous)
+const INSTRUCTIONS: string[] = [
+  "Votre classement est sauvegardÃ© automatiquement dans CE navigateur (localStorage). RedÃ©marrer lâ€™ordinateur ne supprime pas ces donnÃ©es.",
+  "Pour retrouver votre travail sur un autre appareil : utilisez la section â€˜Seed (sauvegarde cloud)â€™.",
+  "1) Cliquez sur â€˜Publier (nouveau seed)â€™ : un ID et un lien ?seed=â€¦ sont gÃ©nÃ©rÃ©s. Ajoutez ce lien en favoris ou partagezâ€‘le.",
+  "2) Quand vous modifiez la tier list, cliquez sur â€˜Mettre Ã  jour le seedâ€™ pour enregistrer la nouvelle version sous le mÃªme ID.",
+  "3) Si quelquâ€™un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer â€˜Publier (nouveau seed)â€™ pour crÃ©er sa propre copie (son ID).",
+  "Astuce : le bouton â€˜Partager le lienâ€™ encode lâ€™Ã©tat DANS lâ€™URL (utile pour de petites listes). Pour 3â€¯500 items, prÃ©fÃ©rez les seeds.",
+  "Pensez Ã  exporter un JSON de sauvegarde de temps en temps (â€˜Exporterâ€™)."
+];
+
+// =====================
+// Sortable tile (image + bouton commentaire discret)
+// =====================
+function Tile({
+  id,
+  name,
+  image,
+  comment,
+  tileSize,
+  selected,
+  highlighted,
+  onClick,
+  isCommentOpen,
+  onCommentToggle,
+}: {
+  id: string;
+  name: string;
+  image?: string;
+  comment?: string;
+  tileSize: number;
+  selected?: boolean;
+  highlighted?: boolean;
+  onClick?: () => void;
+  isCommentOpen?: boolean;
+  onCommentToggle?: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width: tileSize,
+    height: tileSize,
+    touchAction: "none",
+  };
+
+  return (
+    <motion.div
+      ref={setNodeRef}
+      style={style}
+      layout
+      data-item-id={id}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      className={cx(
+        "relative overflow-hidden select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
+        "bg-zinc-900 border-zinc-700 text-zinc-100",
+        selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : ""
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      {image ? (
+        <>
+          <img
+            src={image}
+            alt={name}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
+            <span className="font-semibold text-white drop-shadow-sm px-1">{name}</span>
+          </div>
+        </>
+      ) : (
+        <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+      )}
+
+      {/* Bouton discret pour ouvrir/fermer le panneau global de commentaire */}
+      {comment && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onCommentToggle?.(id);
+          }}
+          className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
+          title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
+        >
+          {isCommentOpen ? (
+            <X className="h-3.5 w-3.5 text-zinc-100" />
+          ) : (
+            <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />
+          )}
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+
+// =====================
+// Droppable wrapper (click-to-place supported)
+// =====================
+function Droppable({ id, children, onClick }: { id: string; children: React.ReactNode; onClick?: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      data-droppable-id={id}
+      onClick={onClick}
+      className={cx("min-h-[120px] rounded-md", isOver && "ring-2 ring-indigo-500/60", DARK.cardBg)}
+      style={{ touchAction: "none" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// =====================
+// State helpers
+// =====================
+function makeEmptyGrid(rowsLen: number, colsLen: number) {
+  const containers: Record<string, string[]> = {};
+  for (let r = 0; r < rowsLen; r++) {
+    for (let c = 0; c < colsLen; c++) {
+      containers[`r${r}-c${c}`] = [];
+    }
+  }
+  containers[POOL_ID] = [];
+  return containers;
+}
+
+function stateFromNames(names: string[]): AppState {
+  const items: Record<string, Item> = {};
+  const containers = makeEmptyGrid(DEFAULT_ROWS.length, DEFAULT_COLS.length);
+  const pool: string[] = [];
+  names.forEach((n) => {
+    const idBase = slug(n) || Math.random().toString(36).slice(2);
+    const id = items[idBase] ? `${idBase}-${Math.random().toString(36).slice(2, 6)}` : idBase;
+    items[id] = { id, name: n };
+    pool.push(id);
+  });
+  containers[POOL_ID] = sortIdsAlpha(pool, items);
+  return {
+    rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
+    cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
+    colWidths: Array(DEFAULT_COLS.length).fill(220),
+    containers,
+    items,
+    poolId: POOL_ID,
+    tileSize: 96,
+    forceDark: true,
+  };
+}
+
+
+function stateFromEntries(entries: Array<{ name: string; image?: string; id?: string }>): AppState {
+  const items: Record<string, Item> = {};
+  const containers = makeEmptyGrid(DEFAULT_ROWS.length, DEFAULT_COLS.length);
+  const pool: string[] = [];
+  entries.forEach(({ name, image, id }) => {
+    const base = slug(id || name) || Math.random().toString(36).slice(2);
+    const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+    items[uid] = { id: uid, name, image };
+    pool.push(uid);
+  });
+  containers[POOL_ID] = sortIdsAlpha(pool, items);
+  return {
+    rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
+    cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
+    colWidths: Array(DEFAULT_COLS.length).fill(220),
+    containers,
+    items,
+    poolId: POOL_ID,
+    tileSize: 96,
+    forceDark: true,
+  };
+}
+
+function encodeState(state: AppState) {
+  try {
+    return LZString.compressToEncodedURIComponent(JSON.stringify(state));
+  } catch (e) {
+    console.error(e);
+    return "";
+  }
+}
+function decodeState(s: string): any | null {
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(s);
+    if (!json) return null;
+    return JSON.parse(json);
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+function migrateState(obj: any): AppState | null {
+  if (!obj) return null;
+  const rows: Row[] = Array.isArray(obj.rows)
+    ? obj.rows.map((r: any, i: number) => (typeof r === "string" ? { label: r, color: DEFAULT_ROWS[i % DEFAULT_ROWS.length].color } : r))
+    : DEFAULT_ROWS;
+  const cols: Col[] = Array.isArray(obj.cols)
+    ? obj.cols.map((c: any, i: number) => (typeof c === "string" ? { label: c, color: DEFAULT_COLS[i % DEFAULT_COLS.length].color } : c))
+    : DEFAULT_COLS;
+
+  const containers: Record<string, string[]> = obj.containers || makeEmptyGrid(rows.length, cols.length);
+  const items: Record<string, Item> = obj.items || {};
+  const poolId = obj.poolId || POOL_ID;
+  const tileSize = typeof obj.tileSize === "number" ? obj.tileSize : 96;
+  const forceDark = typeof obj.forceDark === "boolean" ? obj.forceDark : true;
+  const colWidths: number[] = Array.isArray(obj.colWidths) && obj.colWidths.length === cols.length
+    ? obj.colWidths.map((n: any) => (typeof n === "number" ? n : 220))
+    : Array(cols.length).fill(220);
+
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < cols.length; c++) {
+      const id = `r${r}-c${c}`;
+      if (!containers[id]) containers[id] = [];
+    }
+  if (!containers[poolId]) containers[poolId] = [];
+
+  return { rows, cols, colWidths, containers, items, poolId, tileSize, forceDark };
+}
+
+// =====================
+// Self-tests (dev only, safe in browser)
+// =====================
+function assert(name: string, cond: boolean) {
+  if (cond) console.log(`âœ… ${name}`); else console.error(`âŒ ${name}`);
+}
+function runSelfTests() {
+  const s1 = splitImport("A,B;C\tD\nE\r\nF");
+  assert("splitImport handles , ; \t and newlines", s1.join("|") === "A|B|C|D|E|F");
+
+  const pp = parsePairs("Alpha\thttp://x/a.jpg\tPÃ©riode 2016-2019\nBeta | https://x/b.webp\nGamma");
+  assert("parsePairs length", pp.length === 3);
+  assert("parsePairs images detected", !!pp[0].image && !!pp[1].image && !pp[2].image);
+  assert("parsePairs comment captured", pp[0].comment === "PÃ©riode 2016-2019");
+
+
+  const st = stateFromEntries([{ name: "Alpha" }, { name: "Beta", image: "http://x/b.jpg" }]);
+  assert("stateFromEntries pool size", (st.containers[st.poolId] || []).length === 2);
+
+  const enc = encodeState(st); const dec = decodeState(enc);
+  assert("encode/decode works", !!dec && typeof dec === "object");
+
+  const mig = migrateState({ rows: ["R1"], cols: ["C1"], containers: { [POOL_ID]: [] }, items: {} });
+  assert("migrateState basic", !!mig && Array.isArray(mig.rows) && Array.isArray(mig.cols));
+}
+
+// =====================
+// Main App
+// =====================
+export default function TierList2D() {
+  const initialState = useMemo<AppState>(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    if (hash) {
+      const dec = decodeState(hash);
+      const mig = migrateState(dec);
+      if (mig) return mig;
+    }
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("tierlist2d-state");
+      if (raw) {
+        try {
+          const mig = migrateState(JSON.parse(raw));
+          if (mig) return mig;
+        } catch {}
+      }
+    }
+    return stateFromNames([]);
+  }, []);
+
+  const [state, setState] = useState<AppState>(initialState);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [pairsText, setPairsText] = useState("");
+  const [autoSyncURL, setAutoSyncURL] = useState(false);
+  const [poolQuery, setPoolQuery] = useState("");
+  const [clickMode] = useState(true); // always click mode
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [seedInput, setSeedInput] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [loadingSeed, setLoadingSeed] = useState(false);
+  const [lastSeedId, setLastSeedId] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(true);
+  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
+  const [commentPos, setCommentPos] = useState<{top:number; left:number; width:number} | null>(null);
+  const [showAxes, setShowAxes] = useState(true);
+  const [isEditingComment, setIsEditingComment] = useState(false);
+  const [draftComment, setDraftComment] = useState("");
+  const commentRef = useRef<HTMLDivElement | null>(null);
+
+  const matchedIds = useMemo(() => {
+    const q = normalizeText(search);
+    if (!q) return new Set<string>();
+    const s = new Set<string>();
+    for (const [id, it] of Object.entries(state.items)) {
+      if (normalizeText(it.name).includes(q)) s.add(id);
+    }
+    return s;
+  }, [state.items, search]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
+    useSensor(MouseSensor),
+    useSensor(TouchSensor),
+  );
+
+  // Load last used seed id (for convenience)
+  useEffect(() => {
+    try { const sid = localStorage.getItem("tier2d-last-seed-id"); if (sid) setLastSeedId(sid); } catch {}
+  }, []);
+
+// --- Navigation alphabÃ©tique du Bac ---
+// null = toutes les tranches
+const [poolAlpha, setPoolAlpha] = useState<string | null>(null);
+
+// Paires de tranches
+const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ"] as const;
+type AlphaKey = typeof ALPHA_BUCKETS[number];
+
+// DÃ©termine la tranche d'un nom
+function bucketForName(name: string): AlphaKey {
+  const first = (name || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toUpperCase().charAt(0);
+
+  if (first >= "0" && first <= "9") return "09";
+
+  const code = first.charCodeAt(0); // A=65 â€¦ Z=90
+  if (code >= 65 && code <= 90) {
+    const pairs: [AlphaKey, number, number][] = [
+      ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
+      ["IJ",73,74],["KL",75,76],["MN",77,78],["OP",79,80],
+      ["QR",81,82],["ST",83,84],["UV",85,86],["WX",87,88],
+      ["YZ",89,90],
+    ];
+    for (const [key, a, b] of pairs) if (code === a || code === b) return key;
+  }
+
+  // fallback (tu peux crÃ©er une tranche â€œAutresâ€ si tu veux)
+  return "YZ";
+}
+
+// Look d'une puce de tranche
+function chipCls(active: boolean) {
+  return [
+    "px-2 py-1 rounded-md text-xs border",
+    active
+      ? "bg-zinc-200 text-zinc-900 border-zinc-300"
+      : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
+  ].join(" ");
+}
+
+  
+  // Persist
+  useEffect(() => {
+    try {
+      localStorage.setItem("tierlist2d-state", JSON.stringify(state));
+      if (autoSyncURL) {
+        const enc = encodeState(state);
+        if (enc) history.replaceState(null, "", `#${enc}`);
+      }
+    } catch {}
+  }, [state, autoSyncURL]);
+
+  // (1) Quand on ouvre un commentaire, prÃ©parer le brouillon et sortir du mode Ã©dition
+useEffect(() => {
+  if (!openCommentId) return;
+  setIsEditingComment(false);
+  setDraftComment(state.items[openCommentId]?.comment ?? "");
+}, [openCommentId, state.items]);
+
+// (2) Fermer le panneau si on clique en dehors
+useEffect(() => {
+  if (!openCommentId) return;
+
+  const onDown = (e: MouseEvent) => {
+    if (commentRef.current && !commentRef.current.contains(e.target as Node)) {
+      setOpenCommentId(null);
+      setCommentPos(null);
+      setIsEditingComment(false);
+    }
+  };
+
+  // capture=true pour passer avant d'Ã©ventuels stopPropagation
+  document.addEventListener("mousedown", onDown, true);
+  return () => document.removeEventListener("mousedown", onDown, true);
+}, [openCommentId]);
+
+// (3) Recalculer la position du panneau au resize/scroll (si tu ne l'as pas dÃ©jÃ )
+useEffect(() => {
+  if (!openCommentId) return;
+
+  const recalc = () => {
+    const el = document.querySelector(
+      `[data-item-id="${openCommentId}"]`
+    ) as HTMLElement | null;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const width = Math.max(rect.width * 2 + 16, 280);
+
+    // coordonnÃ©es viewport (panneau en position: fixed)
+    const left = Math.min(
+      rect.right + gap,
+      document.documentElement.clientWidth - width - 12
+    );
+    const top = Math.min(
+      rect.top - 4,
+      document.documentElement.clientHeight - 100
+    );
+
+    setCommentPos({ top, left, width });
+  };
+
+  recalc();
+  window.addEventListener("resize", recalc);
+  window.addEventListener("scroll", recalc, { passive: true });
+  return () => {
+    window.removeEventListener("resize", recalc);
+    window.removeEventListener("scroll", recalc);
+  };
+}, [openCommentId]);
+
+
+  // If URL has ?seed=XYZ on first load, fetch it
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const seed = url.searchParams.get('seed');
+      if (seed) { loadSeed(seed); }
+    } catch {}
+  }, []);
+
+  // Dev self-tests (safe env checks)
+  useEffect(() => {
+    try {
+      const g: any = typeof globalThis !== "undefined" ? (globalThis as any) : {};
+      const isDev = !!g.process?.env?.NODE_ENV ? g.process.env.NODE_ENV !== "production" : false;
+      if (isDev && typeof window !== "undefined") {
+        const w: any = window as any;
+        if (!w.__tier2d_tests_ran__) {
+          w.__tier2d_tests_ran__ = true;
+          runSelfTests();
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Ensure containers exist after rows/cols edits & keep colWidths in sync
+  useEffect(() => {
+    setState((prev) => {
+      const containers = { ...prev.containers };
+      for (let r = 0; r < prev.rows.length; r++)
+        for (let c = 0; c < prev.cols.length; c++)
+          if (!containers[`r${r}-c${c}`]) containers[`r${r}-c${c}`] = [];
+
+      const valid = new Set<string>([prev.poolId]);
+      for (let r = 0; r < prev.rows.length; r++)
+        for (let c = 0; c < prev.cols.length; c++) valid.add(`r${r}-c${c}`);
+
+      const pool = [...(containers[prev.poolId] || [])];
+      Object.keys(containers).forEach((k) => {
+        if (!valid.has(k)) {
+          pool.push(...containers[k]);
+          delete containers[k];
+        }
+      });
+      containers[prev.poolId] = pool;
+
+      // sync colWidths length
+      const colWidths = prev.colWidths.length === prev.cols.length
+        ? prev.colWidths
+        : Array(prev.cols.length).fill(prev.colWidths[0] ?? 220);
+
+      return { ...prev, containers, colWidths };
+    });
+  }, [state.rows.length, state.cols.length]);
+
+  useEffect(() => {
+  if (!openCommentId) return;
+
+  const recalc = () => {
+    const el = document.querySelector(`[data-item-id="${openCommentId}"]`) as HTMLElement | null;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const width = Math.max(rect.width * 2 + 16, 280);
+
+    // coordonnÃ©es viewport (position: fixed)
+    const leftCandidate = rect.right + gap;
+    const maxLeft = document.documentElement.clientWidth - width - 12;
+    const left = Math.min(leftCandidate, maxLeft);
+
+    const topCandidate = rect.top - 4;
+    const maxTop = document.documentElement.clientHeight - 100;
+    const top = Math.min(topCandidate, maxTop);
+
+    setCommentPos({ top, left, width });
+  };
+
+  recalc();
+  window.addEventListener("resize", recalc);
+  window.addEventListener("scroll", recalc, { passive: true });
+  return () => {
+    window.removeEventListener("resize", recalc);
+    window.removeEventListener("scroll", recalc);
+  };
+}, [openCommentId]);
+
+
+  const getContainerByItem = (itemId: string) => {
+    for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
+    return null;
+  };
+
+  function moveToContainer(itemId: string, containerId: string) {
+    setState((prev) => {
+      const next = { ...prev, containers: { ...prev.containers } } as AppState;
+      const from = getContainerByItem(itemId);
+      if (!from) return prev;
+      if (!next.containers[containerId]) next.containers[containerId] = [];
+      const src = [...next.containers[from]];
+      const idx = src.indexOf(itemId);
+      if (idx > -1) src.splice(idx, 1);
+      next.containers[from] = src;
+      next.containers[containerId] = (containerId === next.poolId)
+        ? sortIdsAlpha([...(next.containers[containerId] || []), itemId], next.items)
+        : [...(next.containers[containerId] || []), itemId];
+      return next;
+    });
+  }
+
+function toggleCommentFor(id: string) {
+  if (openCommentId === id) {
+    setOpenCommentId(null);
+    setCommentPos(null);
+    return;
+  }
+  const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+  if (!el) return;
+
+  const rect = el.getBoundingClientRect();
+  const gap = 8;
+  const width = Math.max(rect.width * 2 + 16, 280);
+
+  // Position â€œpageâ€ (et pas â€œviewportâ€) -> lâ€™overlay dÃ©file avec la page
+  const leftCandidate = rect.right + window.scrollX + gap;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
+  const left = Math.min(leftCandidate, maxLeft);
+
+  const topCandidate = rect.top + window.scrollY - 4;
+  const maxTop = window.scrollY + document.documentElement.clientHeight - 100; // petite marge
+  const top = Math.min(topCandidate, maxTop);
+
+  setCommentPos({ top, left, width });   // garde les mÃªmes clÃ©s que ton state actuel
+  setOpenCommentId(id);
+}
+
+
+
+  // DnD handlers (kept but optional)
+  function deleteCommentById(id: string) {
+  setState(prev => {
+    const items = { ...prev.items };
+    if (items[id]) {
+      items[id] = { ...items[id] };
+      delete items[id].comment;
+    }
+    return { ...prev, items } as AppState;
+  });
+  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
+}
+  function handleDragStart(event: any) { setActiveId(event.active?.id ?? null); }
+  function handleDragOver(event: any) {
+  const { active, over } = event; if (!over) return;
+  const activeId = active.id as string;
+  const overId = over.id as string; if (overId === undefined) return;
+
+  const sourceContainer = getContainerByItem(activeId);
+  const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
+  if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
+
+  setState((prev) => {
+    const next = { ...prev, containers: { ...prev.containers } } as AppState;
+    const sourceItems = [...(next.containers[sourceContainer] || [])];
+    const destItems   = [...(next.containers[destContainer]   || [])];
+
+    const idx = sourceItems.indexOf(activeId);
+    if (idx > -1) sourceItems.splice(idx, 1);
+    destItems.push(activeId);
+
+    next.containers[sourceContainer] = sourceItems;
+    next.containers[destContainer]   = (destContainer === next.poolId)
+      ? sortIdsAlpha(destItems, next.items)
+      : destItems;
+
+    return next;
+  });
+}
+  function handleDragEnd(event: any) {
+    const { active, over } = event; setActiveId(null); if (!over) return;
+    const activeId = active.id as string; const overId = over.id as string;
+    const sourceContainer = getContainerByItem(activeId); const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
+    if (!sourceContainer || !destContainer) return;
+    if (sourceContainer === destContainer) {
+      setState((prev) => {
+        if (sourceContainer === prev.poolId) {
+          const sorted = sortIdsAlpha([...(prev.containers[sourceContainer] || [])], prev.items);
+          return { ...prev, containers: { ...prev.containers, [sourceContainer]: sorted } } as AppState;
+        }
+        const items = [...(prev.containers[sourceContainer] || [])];
+        const oldIndex = items.indexOf(activeId);
+        let newIndex = items.indexOf(overId);
+        if (newIndex === -1) newIndex = oldIndex;
+        return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) } } as AppState;
+      });
+    }
+  }
+
+
+  // UI actions for rows/cols
+  function addRow() { setState((s) => ({ ...s, rows: [...s.rows, { label: `Ligne ${s.rows.length + 1}`, color: "#94a3b8" }] })); }
+  function addCol() { setState((s) => ({ ...s, cols: [...s.cols, { label: `Colonne ${s.cols.length + 1}`, color: "#94a3b8" }], colWidths: [...s.colWidths, s.colWidths.at(-1) ?? 220] })); }
+  function removeRow(i: number) { setState((s) => ({ ...s, rows: s.rows.filter((_, idx) => idx !== i) })); }
+  function removeCol(i: number) { setState((s) => ({ ...s, cols: s.cols.filter((_, idx) => idx !== i), colWidths: s.colWidths.filter((_, idx) => idx !== i) })); }
+  function renameRow(i: number, v: string) {
+  setState((s) => {
+    const rows = [...s.rows];
+    rows[i] = { ...rows[i], label: v };
+    return { ...s, rows };
+  });
+}
+function recolorRow(i: number, v: string) {
+  setState((s) => {
+    const rows = [...s.rows];
+    rows[i] = { ...rows[i], color: v };
+    return { ...s, rows };
+  });
+}
+function renameCol(i: number, v: string) {
+  setState((s) => {
+    const cols = [...s.cols];
+    cols[i] = { ...cols[i], label: v };
+    return { ...s, cols };
+  });
+}
+function recolorCol(i: number, v: string) {
+  setState((s) => {
+    const cols = [...s.cols];
+    cols[i] = { ...cols[i], color: v };
+    return { ...s, cols };
+  });
+}
+function setColWidth(i: number, v: number) {
+  setState((s) => {
+    const cw = [...s.colWidths];
+    const w = Math.max(140, Math.min(560, Math.round(v)));
+    cw[i] = w;
+    return { ...s, colWidths: cw };
+  });
+}
+function applyColWidthAll(v: number) {
+  setState((s) => ({
+    ...s,
+    colWidths: Array(s.cols.length).fill(Math.max(140, Math.min(560, Math.round(v)))),
+  }));
+}
+function clearGridKeepItems() {
+  setState((s) => {
+    const containers = makeEmptyGrid(s.rows.length, s.cols.length);
+    const allIds = Object.values(s.containers).flat();
+    containers[POOL_ID] = sortIdsAlpha(allIds, s.items);
+    return { ...s, containers };
+  });
+}
+
+  function resetAll() { setState(stateFromNames([])); history.replaceState(null, "", "#"); }
+  function exportState() { try { const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "tierlist2d_state.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); } catch { alert("Export impossible dans cet environnement."); } }
+  function importStateFromFile(file: File) {
+    const reader = new FileReader(); reader.onload = () => { try {
+      const obj = JSON.parse(String(reader.result));
+      if (Array.isArray(obj)) {
+        if (obj.length && typeof obj[0] === "object" && obj[0].name) { setState(stateFromEntries(obj)); }
+        else { setState(stateFromNames(obj.map(String))); }
+        return;
+      }
+      const mig = migrateState(obj); if (mig) setState(mig);
+    } catch { alert("Fichier invalide"); } }; reader.readAsText(file);
+  }
+  function shareURL(copyOnly = true) {
+    const enc = encodeState(state); if (!enc) return;
+    const url = `${location.origin}${location.pathname}#${enc}`;
+    navigator.clipboard?.writeText(url);
+    if (!copyOnly) history.replaceState(null, "", `#${enc}`);
+    alert("Lien copiÃ© dans le presse-papiers âœ¨");
+  }
+
+  // --- Seed publishing (to Vercel Blob via API) ---
+  async function publishSeed(explicitId?: string) {
+    try {
+      setPublishing(true);
+      const encoded = encodeState(state);
+      const payload: any = { data: encoded };
+      if (explicitId && explicitId.trim()) payload.id = explicitId.trim();
+      const res = await fetch('/api/seed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const id: string = j.id;
+      setLastSeedId(id);
+      try { localStorage.setItem('tier2d-last-seed-id', id); } catch {}
+      const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
+      await navigator.clipboard?.writeText(share);
+      alert(`Seed publiÃ© !
+ID: ${id}
+Lien copiÃ© : ${share}`);
+    } catch (e: any) {
+      alert(`Ã‰chec publication du seed. ${e?.message || ''}
+As-tu bien configurÃ© Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
+    } finally { setPublishing(false); }
+  }
+
+  async function loadSeed(input: string) {
+    try {
+      setLoadingSeed(true);
+      let url = input.trim();
+      // autoriser collage direct de l'URL blob
+      if (!/^https?:\/\//i.test(url)) url = `/api/seed/${encodeURIComponent(url)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const dec = decodeState(j.data);
+      const mig = migrateState(dec);
+      if (mig) {
+        setState(mig);
+        if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
+        alert('Seed chargÃ© âœ”ï¸');
+      } else {
+        alert('Seed invalide.');
+      }
+    } catch (e: any) {
+      alert(`Ã‰chec chargement du seed. ${e?.message || ''}`);
+    } finally { setLoadingSeed(false); }
+  }
+function importPairs() {
+  const entries = parsePairs(pairsText);
+  if (!entries.length) return;
+
+  const items = { ...state.items };
+  const pool = [...(state.containers[state.poolId] || [])];
+
+  for (const { name, image, comment } of entries) {
+    const base = slug(name) || Math.random().toString(36).slice(2);
+    const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+
+    items[uid] = {
+      id: uid,
+      name,
+      image: image,
+      comment,
+    };
+
+    pool.push(uid);
+  }
+
+  setPairsText("");
+  setState((s) => ({
+    ...s,
+    items,
+    containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) },
+  }));
+}
+
+
+  const T = DARK; // always dark
+
+  function deleteItem(id: string) {
+  setState((prev) => {
+    const containers = { ...prev.containers };
+    for (const [cid, arr] of Object.entries(containers)) {
+      const idx = arr.indexOf(id);
+      if (idx > -1) {
+        const clone = [...arr];
+        clone.splice(idx, 1);
+        containers[cid] = clone;
+      }
+    }
+    const items = { ...prev.items };
+    delete items[id];
+    return { ...prev, containers, items } as AppState;
+  });
+  if (selectedId === id) setSelectedId(null);
+  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
+}
+
+function clearPool() {
+  setState((prev) => {
+    const pool = prev.containers[prev.poolId] || [];
+    const items = { ...prev.items };
+    for (const id of pool) delete items[id];
+    return { ...prev, items, containers: { ...prev.containers, [prev.poolId]: [] } } as AppState;
+  });
+}
+
+  function scrollToFirstMatch() {
+    const id = Array.from(matchedIds)[0];
+    if (!id) return;
+    const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName?.toLowerCase();
+      const editing = tag === "input" || tag === "textarea" || (t as any)?.isContentEditable;
+      if (editing) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        deleteItem(selectedId);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
+
+  // Grid template: header + dynamic cols (px)
+// === valeurs dÃ©rivÃ©es pour la grille & le bac ===
+// === derived values used by the render (INSIDE the component) ===
+const colsPx = (state.colWidths?.length ? state.colWidths : Array(state.cols.length).fill(220))
+  .map((w) => `${w}px`)
+  .join(" ");
+
+const gridTemplate: React.CSSProperties = {
+  gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
+};
+
+const poolIds = state.containers[state.poolId] || [];
+const filteredPoolIds = poolQuery
+  ? poolIds.filter((id) =>
+      normalizeText(state.items[id]?.name || id).includes(normalizeText(poolQuery))
+    )
+  : poolIds;
+
+  // n'afficher la barre alphabÃ©tique que si beaucoup d'items
+const showAlphaNav = filteredPoolIds.length > 1000;
+
+// filtre alphabÃ©tique (en plus du champ de recherche)
+const alphaFilteredPoolIds = poolAlpha
+  ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
+  : filteredPoolIds;
+
+
+// ---- render ----
+// IMPORTANT: keep the leading semicolon to avoid ASI issues if the previous line ends with a parenthesis
+;return (
+  <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
+    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+      {/* ====== Barre de titres + actions ====== */}
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D â€“ Rap FR</h1>
+        <div className="flex flex-wrap items-center gap-2">
+  <Button
+    variant="secondary"
+    onClick={() => {
+      const containers = Object.fromEntries(Object.keys(state.containers).map(k => [k, []]));
+      (containers as any)[state.poolId] = sortIdsAlpha(Object.values(state.containers).flat(), state.items);
+      setState(s => ({ ...s, containers: containers as any }));
+    }}
+    title="Tout renvoyer en bas"
+  >
+    <Scissors className="w-4 h-4 mr-2" /> Vider la grille
+  </Button>
+
+  <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'Ã©tat en JSON">
+    <Download className="w-4 h-4 mr-2" /> Exporter
+  </Button>
+
+  <label className="inline-flex items-center gap-2 cursor-pointer">
+    <Upload className="w-4 h-4" />
+    <span className="text-sm">Importer .json</span>
+    <input
+      type="file"
+      accept="application/json"
+      className="hidden"
+      onChange={(e) => {
+        const f = (e.target as HTMLInputElement).files?.[0];
+        if (f) importStateFromFile(f);
+        (e.currentTarget as HTMLInputElement).value = "";
+      }}
+    />
+  </label>
+
+  <Button onClick={() => shareURL(false)} title="Mettre l'Ã©tat dans l'URL et copier le lien">
+    <Link2 className="w-4 h-4 mr-2" /> Partager le lien
+  </Button>
+
+  <Button variant="destructive" onClick={resetAll} title="RÃ©initialiser complÃ¨tement">
+    <RefreshCcw className="w-4 h-4 mr-2" /> RÃ©initialiser
+  </Button>
+
+  {/* Recherche + trouver + effacer */}
+  <Input
+    className={INPUT_DARK + " w-44"}
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Rechercherâ€¦"
+  />
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    onClick={() => {
+      const id = Array.from(matchedIds)[0];
+      if (!id) return;
+      const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }}
+  >
+    Trouver
+  </Button>
+  {search && (
+    <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
+      Effacer
+    </Button>
+  )}
+
+  <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+  {/* Commentaires + suppression tuile */}
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId}
+    onClick={() => selectedId && toggleCommentFor(selectedId)}
+  >
+    Ajouter / ouvrir un commentaire
+  </Button>
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId || !state.items[selectedId!]?.comment}
+    onClick={() => {
+      if (!selectedId) return;
+      setState(prev => {
+        const items = { ...prev.items };
+        if (items[selectedId]) {
+          items[selectedId] = { ...items[selectedId] };
+          delete items[selectedId].comment;
+        }
+        return { ...prev, items } as AppState;
+      });
+      if (openCommentId === selectedId) { setOpenCommentId(null); setCommentPos(null); }
+    }}
+  >
+    Supprimer le commentaire
+  </Button>
+  <Button
+    variant="outline"
+    className={OUTLINE_DARK}
+    disabled={!selectedId}
+    onClick={() => selectedId && deleteItem(selectedId)}
+  >
+    Supprimer la tuile
+  </Button>
+</div>
+</div>
+
+      {/* ====== Mode d'emploi / Seed ====== */}
+   {/* ====== Mode d'emploi / Sauvegarde & partage ====== */}
+<Card>
+  <CardHeader className="flex items-center justify-between gap-2">
+    <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
+    <Button
+      variant="outline"
+      className={OUTLINE_DARK}
+      size="sm"
+      onClick={() => setShowHelp(v => !v)}
+    >
+      {showHelp ? "Masquer" : "Afficher"}
+    </Button>
+  </CardHeader>
+
+  {showHelp && (
+    <CardContent className="space-y-4">
+      <ul className={cx("text-sm list-disc pl-5", T.mutedText)}>
+        {INSTRUCTIONS.map((t, i) => <li key={i}>{t}</li>)}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          className={INPUT_DARK + " w-56"}
+          placeholder="ID du seed ou URL"
+          value={seedInput}
+          onChange={(e) => setSeedInput(e.target.value)}
+        />
+        <Button variant="outline" className={OUTLINE_DARK} disabled={loadingSeed} onClick={() => loadSeed(seedInput)}>
+          {loadingSeed ? "Chargementâ€¦" : "Charger seed"}
+        </Button>
+        <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
+          {publishing ? "Publicationâ€¦" : "Publier (nouveau seed)"}
+        </Button>
+        <Button
+          variant="outline"
+          className={OUTLINE_DARK}
+          disabled={publishing || !lastSeedId}
+          onClick={() => lastSeedId && publishSeed(lastSeedId)}
+          title={lastSeedId ? `Mettre Ã  jour le seed ${lastSeedId}` : "Aucun seed chargÃ©"}
+        >
+          {publishing ? "Mise Ã  jourâ€¦" : "Mettre Ã  jour le seed"}
+        </Button>
+        {lastSeedId && (
+          <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
+        )}
+      </div>
+    </CardContent>
+  )}
+</Card>
+
+
+     {/* ====== Axes & options (rÃ©tractable) ====== */}
+<Card>
+  <CardHeader className="flex items-center justify-between gap-2">
+    <CardTitle>Axes & options</CardTitle>
+    <Button
+      variant="outline"
+      className={OUTLINE_DARK}
+      size="sm"
+      onClick={() => setShowAxes(v => !v)}
+    >
+      {showAxes ? "Masquer" : "Afficher"}
+    </Button>
+  </CardHeader>
+
+  {showAxes && (
+    <CardContent className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <Label className="mb-2 block">Axe vertical (lignes) â€” texte & couleur</Label>
+          <div className="space-y-2">
+            {state.rows.map((r, i) => (
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
+                <input
+                  type="color"
+                  value={r.color}
+                  onChange={(e) => recolorRow(i, e.target.value)}
+                  title="Couleur de la ligne"
+                  className="h-10 w-12 rounded cursor-pointer border"
+                />
+                <div
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
+                  title="AperÃ§u"
+                >
+                  AperÃ§u
+                </div>
+                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
+          </div>
+        </div>
+
+        <div>
+          <Label className="mb-2 block">Axe horizontal (colonnes) â€” texte & couleur</Label>
+          <div className="space-y-2">
+            {state.cols.map((c, i) => (
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
+                <input
+                  type="color"
+                  value={c.color}
+                  onChange={(e) => recolorCol(i, e.target.value)}
+                  title="Couleur de la colonne"
+                  className="h-10 w-12 rounded cursor-pointer border"
+                />
+                <div
+                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
+                  style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
+                  title="AperÃ§u"
+                >
+                  AperÃ§u
+                </div>
+                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
+          </div>
+        </div>
+      </div>
+    </CardContent>
+  )}
+</Card>
+
+
+      {/* ====== Grille + Bac + Panneau commentaire ====== */}
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
+        {/* Grille */}
+        <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
+          <div className="grid gap-2 p-2" style={gridTemplate}>
+            <div />
+            {state.cols.map((c, ci) => (
+              <div
+                key={`colh-${ci}`}
+                className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
+              >
+                {c.label}
+              </div>
+            ))}
+
+            {state.rows.map((r, ri) => (
+              <React.Fragment key={`row-${ri}`}>
+                <div
+                  className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
+                >
+                  {r.label}
+                </div>
+
+                {state.cols.map((_, ci) => {
+                  const id = `r${ri}-c${ci}`;
+                  const items = state.containers[id] || [];
+                  return (
+                    <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                      <CardContent className={cx("p-2", T.cardBg)}>
+  <SortableContext items={items} strategy={rectSortingStrategy}>
+    <Droppable
+      id={id}
+      onClick={() => {
+        if (!selectedId) return;
+        if (getContainerByItem(selectedId) === id) return; // dÃ©jÃ  dedans
+        moveToContainer(selectedId, id);
+      }}
+    >
+      <div
+        className="relative w-full flex flex-wrap gap-2"
+        style={{ minHeight: 120 }}
+        data-cell-id={id}
+      >
+        {items.map((itemId) => (
+          <Tile
+            key={itemId}
+            id={itemId}
+            name={state.items[itemId]?.name ?? itemId}
+            image={state.items[itemId]?.image}
+            comment={state.items[itemId]?.comment}
+            tileSize={state.tileSize}
+            selected={selectedId === itemId}
+            highlighted={matchedIds.has(itemId)}
+            onClick={() => setSelectedId(itemId)}
+            isCommentOpen={openCommentId === itemId}
+            onCommentToggle={toggleCommentFor}
+          />
+        ))}
+      </div>
+    </Droppable>
+  </SortableContext>
+</CardContent>
+                    </Card>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+      {/* Bac */}
 <Card>
   <CardHeader className="flex items-center justify-between">
     <CardTitle>Bac (non classés)</CardTitle>
@@ -59,3 +1420,169 @@
     </SortableContext>
   </CardContent>
 </Card>
+
+
+        {/* Panneau commentaire global */}
+     {openCommentId && commentPos && (
+  <div
+    ref={commentRef}
+    style={{
+      position: "fixed",
+      top: commentPos.top,
+      left: commentPos.left,
+      width: commentPos.width,
+      zIndex: 1000,
+    }}
+    className="rounded-xl bg-white text-zinc-900 border border-zinc-300 p-3 text-sm shadow-2xl ring-1 ring-black/5"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <div className="flex justify-between items-start gap-2 mb-2">
+      <div className="font-medium truncate pr-2">
+        {state.items[openCommentId]?.name}
+      </div>
+
+      <div className="flex items-center gap-1">
+        {!isEditingComment ? (
+          <button
+            title="Ã‰diter le commentaire"
+            className="p-1 rounded hover:bg-zinc-100"
+            onClick={() => {
+              setDraftComment(state.items[openCommentId!]?.comment ?? "");
+              setIsEditingComment(true);
+            }}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        ) : (
+          <>
+            <button
+              title="Enregistrer"
+              className="p-1 rounded hover:bg-green-50"
+              onClick={() => {
+                const id = openCommentId!;
+                const newText = draftComment.trim();
+                setState((s) => {
+                  const it = s.items[id];
+                  if (!it) return s;
+                  return {
+                    ...s,
+                    items: {
+                      ...s.items,
+                      [id]: { ...it, comment: newText || undefined },
+                    },
+                  };
+                });
+                setIsEditingComment(false);
+              }}
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              title="Annuler"
+              className="p-1 rounded hover:bg-zinc-100"
+              onClick={() => {
+                setDraftComment(state.items[openCommentId!]?.comment ?? "");
+                setIsEditingComment(false);
+              }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        <button
+          title="Fermer"
+          className="p-1 rounded hover:bg-zinc-100"
+          onClick={() => { setOpenCommentId(null); setCommentPos(null); setIsEditingComment(false); }}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+
+    {!isEditingComment ? (
+      <div className="whitespace-pre-wrap text-zinc-700">
+        {state.items[openCommentId]?.comment || <span className="text-zinc-400">Aucun commentaire.</span>}
+      </div>
+    ) : (
+      <textarea
+        rows={5}
+        value={draftComment}
+        onChange={(e) => setDraftComment(e.target.value)}
+        className="w-full rounded-md border border-zinc-300 bg-white text-zinc-900 px-2 py-1 text-sm
+                   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        placeholder="Ã‰cris ton commentaire iciâ€¦"
+        autoFocus
+      />
+    )}
+  </div>
+)}
+
+        {/* Drag overlay */}
+        <DragOverlay>
+          {activeId ? (
+            <Tile
+              id={activeId}
+              name={state.items[activeId]?.name ?? ""}
+              image={state.items[activeId]?.image}
+              comment={state.items[activeId]?.comment}
+              tileSize={state.tileSize}
+              isCommentOpen={openCommentId === activeId}
+              onCommentToggle={toggleCommentFor}
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+
+          
+      {/* ====== Import noms + images + commentaires ====== */}
+<Card>
+  <CardHeader>
+    <CardTitle>Importer noms + images + commentaires</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <p className={cx("text-sm", T.mutedText)}>
+      Une ligne par artiste. Formats acceptÃ©s :{" "}
+      <code>Nom    URL    Commentaire</code>,{" "}
+      <code>Nom | URL | Commentaire</code>,{" "}
+      <code>Nom,URL,Commentaire</code>,{" "}
+      <code>Nom;URL;Commentaire</code>. Lâ€™image et le commentaire sont optionnels.
+    </p>
+
+    <Textarea
+      className={cx("w-full resize-y", INPUT_DARK)}
+      rows={6}
+      value={pairsText}
+      onChange={(e) => setPairsText(e.target.value)}
+      placeholder={`Ex.
+Nekfeu	https://exemple.com/nekfeu.jpg Un court commentaire
+PNL | https://exemple.com/pnl.webp`}
+    />
+
+    <div className="flex gap-2">
+      <Button onClick={importPairs}>
+        <Upload className="w-4 h-4 mr-2" />
+        Ajouter au bac
+      </Button>
+      <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+        <Trash2 className="w-4 h-4 mr-2" />
+        Vider la zone
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+          
+      {/* â€¦ ta carte dâ€™import â€¦ */}
+
+      <div className={cx("text-xs", T.mutedText)}>
+        <p>
+          Persistance : l'Ã©tat est sauvegardÃ© dans votre navigateur et peut Ãªtre encodÃ© dans l'URL (bouton Â« Partager le lien Â»).
+          Pour un lien public stable, dÃ©ployez ce fichier sur Vercel.
+        </p>
+      </div>
+    </div>
+  </div>
+);
+}
+
