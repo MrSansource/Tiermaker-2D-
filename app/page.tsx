@@ -229,7 +229,8 @@ function Tile({
       style={style}
       layout
       data-item-id={id}
-      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       className={cx(
         "relative overflow-hidden select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
         "bg-zinc-900 border-zinc-700 text-zinc-100",
@@ -496,6 +497,48 @@ export default function TierList2D() {
     try { const sid = localStorage.getItem("tier2d-last-seed-id"); if (sid) setLastSeedId(sid); } catch {}
   }, []);
 
+// --- Navigation alphabétique du Bac ---
+// null = toutes les tranches
+const [poolAlpha, setPoolAlpha] = useState<string | null>(null);
+
+// Paires de tranches
+const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ"] as const;
+type AlphaKey = typeof ALPHA_BUCKETS[number];
+
+// Détermine la tranche d'un nom
+function bucketForName(name: string): AlphaKey {
+  const first = (name || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toUpperCase().charAt(0);
+
+  if (first >= "0" && first <= "9") return "09";
+
+  const code = first.charCodeAt(0); // A=65 … Z=90
+  if (code >= 65 && code <= 90) {
+    const pairs: [AlphaKey, number, number][] = [
+      ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
+      ["IJ",73,74],["KL",75,76],["MN",77,78],["OP",79,80],
+      ["QR",81,82],["ST",83,84],["UV",85,86],["WX",87,88],
+      ["YZ",89,90],
+    ];
+    for (const [key, a, b] of pairs) if (code === a || code === b) return key;
+  }
+
+  // fallback (tu peux créer une tranche “Autres” si tu veux)
+  return "YZ";
+}
+
+// Look d'une puce de tranche
+function chipCls(active: boolean) {
+  return [
+    "px-2 py-1 rounded-md text-xs border",
+    active
+      ? "bg-zinc-200 text-zinc-900 border-zinc-300"
+      : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
+  ].join(" ");
+}
+
+  
   // Persist
   useEffect(() => {
     try {
@@ -989,6 +1032,15 @@ const filteredPoolIds = poolQuery
     )
   : poolIds;
 
+  // n'afficher la barre alphabétique que si beaucoup d'items
+const showAlphaNav = filteredPoolIds.length > 1000;
+
+// filtre alphabétique (en plus du champ de recherche)
+const alphaFilteredPoolIds = poolAlpha
+  ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
+  : filteredPoolIds;
+
+
 // ---- render ----
 // IMPORTANT: keep the leading semicolon to avoid ASI issues if the previous line ends with a parenthesis
 ;return (
@@ -1307,42 +1359,68 @@ const filteredPoolIds = poolQuery
           </div>
         </div>
 
-        {/* Bac */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Bac (non classés)</CardTitle>
-          </CardHeader>
-         <CardContent className={T.cardBg}>
-  <SortableContext items={filteredPoolIds} strategy={rectSortingStrategy}>
-    <Droppable
-      id={state.poolId}
-      onClick={() => {
-        if (!selectedId) return;
-        if (getContainerByItem(selectedId) === state.poolId) return; // déjà au bac
-        moveToContainer(selectedId, state.poolId);
-      }}
-    >
-      <div className="flex flex-wrap gap-2 p-2">
-        {filteredPoolIds.map((itemId) => (
-          <Tile
-            key={itemId}
-            id={itemId}
-            name={state.items[itemId]?.name ?? itemId}
-            image={state.items[itemId]?.image}
-            comment={state.items[itemId]?.comment}
-            tileSize={state.tileSize}
-            selected={selectedId === itemId}
-            highlighted={matchedIds.has(itemId)}
-            onClick={() => setSelectedId(itemId)}
-            isCommentOpen={openCommentId === itemId}
-            onCommentToggle={toggleCommentFor}
-          />
+       {/* Bac */}
+<Card>
+  <CardHeader className="flex items-center justify-between">
+    <CardTitle>Bac (non classés)</CardTitle>
+
+    {showAlphaNav && (
+      <div className="flex items-center gap-1 flex-wrap">
+        <button
+          className={chipCls(poolAlpha === null)}
+          onClick={() => setPoolAlpha(null)}
+          title="Toutes les tranches"
+        >
+          Tous
+        </button>
+        {ALPHA_BUCKETS.map((k) => (
+          <button
+            key={k}
+            className={chipCls(poolAlpha === k)}
+            onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
+            title={`Filtrer: ${k[0]}–${k[1]}`}
+          >
+            {k[0]}–{k[1]}
+          </button>
         ))}
       </div>
-    </Droppable>
-  </SortableContext>
-</CardContent>
-        </Card>
+    )}
+  </CardHeader>
+
+  <CardContent className={T.cardBg}>
+    <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
+      <Droppable
+        id={state.poolId}
+        onClick={(e) => {
+          // 👇 ne rien faire si le clic vient d'une tuile
+          if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
+
+          if (!selectedId) return;
+          if (getContainerByItem(selectedId) === state.poolId) return; // déjà au bac
+          moveToContainer(selectedId, state.poolId);
+        }}
+      >
+        <div className="flex flex-wrap gap-2 p-2" style={{ contain: "layout paint" }}>
+          {alphaFilteredPoolIds.map((itemId) => (
+            <Tile
+              key={itemId}
+              id={itemId}
+              name={state.items[itemId]?.name ?? itemId}
+              image={state.items[itemId]?.image}
+              comment={state.items[itemId]?.comment}
+              tileSize={state.tileSize}
+              selected={selectedId === itemId}
+              highlighted={matchedIds.has(itemId)}
+              onClick={() => setSelectedId(itemId)}
+              isCommentOpen={openCommentId === itemId}
+              onCommentToggle={toggleCommentFor}
+            />
+          ))}
+        </div>
+      </Droppable>
+    </SortableContext>
+  </CardContent>
+</Card>
 
         {/* Panneau commentaire global */}
      {openCommentId && commentPos && (
