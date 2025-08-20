@@ -78,7 +78,7 @@ const NON_ALNUM_RE = /[^a-z0-9]+/g;                              // tout sauf a-
 const EDGE_DASH_RE = /(^-|-$)+/g;                                // tirets en bord
 
 // Remove diacritics & make a slug
-const slug = (s: string): string => {
+function slug = (s: string): string => {
   try {
     return s
       .toLowerCase()
