@@ -72,19 +72,26 @@ const DEFAULT_COLS: Col[] = [
 const TILE_BG = "#23242a"; // lÃ©gÃ¨rement plus clair que bg gÃ©nÃ©ral
 const TILE_BORDER = "#3f3f46"; // gris mÃ©dian
 
-// Remove diacritics & make a slug
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
+// Précompile les regex (évite les soucis d'échappement \u)
+const COMBINING_MARKS_RE = new RegExp("[\\u0300-\\u036f]", "g"); // accents
+const NON_ALNUM_RE = /[^a-z0-9]+/g;                              // tout sauf a-z0-9
+const EDGE_DASH_RE = /(^-|-$)+/g;                                // tirets en bord
 
-function normalizeText(s: string) {
-  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "");
-}
+// Remove diacritics & make a slug
+const slug = (s: string): string => {
+  try {
+    return s
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(COMBINING_MARKS_RE, "")
+      .replace(NON_ALNUM_RE, "-")
+      .replace(EDGE_DASH_RE, "");
+  } catch {
+    // fallback si normalize indisponible
+    return s.toLowerCase().trim().replace(NON_ALNUM_RE, "-").replace(EDGE_DASH_RE, "");
+  }
+};
 
 // Alpha sorting helper for pool (French collator, accent-insensitive)
 const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
