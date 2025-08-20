@@ -563,30 +563,34 @@ export default function TierList2D() {
   if (!openCommentId) return;
 
   const recalc = () => {
-    const id = openCommentId;
-    const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+    const el = document.querySelector(`[data-item-id="${openCommentId}"]`) as HTMLElement | null;
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
     const gap = 8;
     const width = Math.max(rect.width * 2 + 16, 280);
 
-    const leftCandidate = rect.right + window.scrollX + gap;
-    const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
+    // coordonnées viewport (position: fixed)
+    const leftCandidate = rect.right + gap;
+    const maxLeft = document.documentElement.clientWidth - width - 12;
     const left = Math.min(leftCandidate, maxLeft);
 
-    const topCandidate = rect.top + window.scrollY - 4;
-    const maxTop = window.scrollY + document.documentElement.clientHeight - 100;
+    const topCandidate = rect.top - 4;
+    const maxTop = document.documentElement.clientHeight - 100;
     const top = Math.min(topCandidate, maxTop);
 
     setCommentPos({ top, left, width });
   };
 
-  // on recalcule à l’ouverture et lors des resize
   recalc();
   window.addEventListener("resize", recalc);
-  return () => window.removeEventListener("resize", recalc);
+  window.addEventListener("scroll", recalc, { passive: true });
+  return () => {
+    window.removeEventListener("resize", recalc);
+    window.removeEventListener("scroll", recalc);
+  };
 }, [openCommentId]);
+
 
   const getContainerByItem = (itemId: string) => {
     for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
@@ -1198,30 +1202,39 @@ const filteredPoolIds = poolQuery
                   return (
                     <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
                       <CardContent className={cx("p-2", T.cardBg)}>
-                        <SortableContext items={items} strategy={rectSortingStrategy}>
-                          <div
-                            className="relative w-full flex flex-wrap gap-2"
-                            style={{ minHeight: 120 }}
-                            data-cell-id={id}
-                          >
-                            {items.map((itemId) => (
-                              <Tile
-                                key={itemId}
-                                id={itemId}
-                                name={state.items[itemId]?.name ?? itemId}
-                                image={state.items[itemId]?.image}
-                                comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
-                                selected={selectedId === itemId}
-                                highlighted={matchedIds.has(itemId)}
-                                onClick={() => setSelectedId(itemId)}
-                                isCommentOpen={openCommentId === itemId}
-                                onCommentToggle={toggleCommentFor}
-                              />
-                            ))}
-                          </div>
-                        </SortableContext>
-                      </CardContent>
+  <SortableContext items={items} strategy={rectSortingStrategy}>
+    <Droppable
+      id={id}
+      onClick={() => {
+        if (!selectedId) return;
+        if (getContainerByItem(selectedId) === id) return; // déjà dedans
+        moveToContainer(selectedId, id);
+      }}
+    >
+      <div
+        className="relative w-full flex flex-wrap gap-2"
+        style={{ minHeight: 120 }}
+        data-cell-id={id}
+      >
+        {items.map((itemId) => (
+          <Tile
+            key={itemId}
+            id={itemId}
+            name={state.items[itemId]?.name ?? itemId}
+            image={state.items[itemId]?.image}
+            comment={state.items[itemId]?.comment}
+            tileSize={state.tileSize}
+            selected={selectedId === itemId}
+            highlighted={matchedIds.has(itemId)}
+            onClick={() => setSelectedId(itemId)}
+            isCommentOpen={openCommentId === itemId}
+            onCommentToggle={toggleCommentFor}
+          />
+        ))}
+      </div>
+    </Droppable>
+  </SortableContext>
+</CardContent>
                     </Card>
                   );
                 })}
@@ -1235,48 +1248,67 @@ const filteredPoolIds = poolQuery
           <CardHeader>
             <CardTitle>Bac (non classés)</CardTitle>
           </CardHeader>
-          <CardContent className={T.cardBg}>
-            <SortableContext items={filteredPoolIds} strategy={rectSortingStrategy}>
-              <div className="flex flex-wrap gap-2 p-2">
-                {filteredPoolIds.map((itemId) => (
-                  <Tile
-                    key={itemId}
-                    id={itemId}
-                    name={state.items[itemId]?.name ?? itemId}
-                    image={state.items[itemId]?.image}
-                    comment={state.items[itemId]?.comment}
-                    tileSize={state.tileSize}
-                    selected={selectedId === itemId}
-                    highlighted={matchedIds.has(itemId)}
-                    onClick={() => setSelectedId(itemId)}
-                    isCommentOpen={openCommentId === itemId}
-                    onCommentToggle={toggleCommentFor}
-                  />
-                ))}
-              </div>
-            </SortableContext>  
-          </CardContent>
+         <CardContent className={T.cardBg}>
+  <SortableContext items={filteredPoolIds} strategy={rectSortingStrategy}>
+    <Droppable
+      id={state.poolId}
+      onClick={() => {
+        if (!selectedId) return;
+        if (getContainerByItem(selectedId) === state.poolId) return; // déjà au bac
+        moveToContainer(selectedId, state.poolId);
+      }}
+    >
+      <div className="flex flex-wrap gap-2 p-2">
+        {filteredPoolIds.map((itemId) => (
+          <Tile
+            key={itemId}
+            id={itemId}
+            name={state.items[itemId]?.name ?? itemId}
+            image={state.items[itemId]?.image}
+            comment={state.items[itemId]?.comment}
+            tileSize={state.tileSize}
+            selected={selectedId === itemId}
+            highlighted={matchedIds.has(itemId)}
+            onClick={() => setSelectedId(itemId)}
+            isCommentOpen={openCommentId === itemId}
+            onCommentToggle={toggleCommentFor}
+          />
+        ))}
+      </div>
+    </Droppable>
+  </SortableContext>
+</CardContent>
         </Card>
 
         {/* Panneau commentaire global */}
-        {openCommentId && commentPos && state.items[openCommentId]?.comment && (
-          <div
-            style={{ position: "absolute", top: commentPos.top, left: commentPos.left, width: commentPos.width, zIndex: 1000 }}
-            className="rounded-xl bg-white !text-black border border-zinc-300 shadow-xl ring-1 ring-black/5 isolate z-[1000] p-3 text-sm mix-blend-normal"
-            onClick={(e) => e.stopPropagation()}
-         
-          >
-            <div className="flex justify-between items-start gap-2 mb-1">
-              <div className="font-medium text-zinc-100">{state.items[openCommentId]?.name}</div>
-              <button onClick={() => { setOpenCommentId(null); setCommentPos(null); }} title="Fermer">
-                <X className="w-4 h-4 text-zinc-300" />
-              </button>
-            </div>
-            <div className="whitespace-pre-wrap text-zinc-200">
-              {state.items[openCommentId]?.comment}
-            </div>
-          </div>
-        )}
+       {openCommentId && commentPos && state.items[openCommentId]?.comment && (
+  <div
+    style={{
+      position: "fixed",
+      top: commentPos.top,
+      left: commentPos.left,
+      width: commentPos.width,
+      zIndex: 1000
+    }}
+    className="rounded-xl bg-white border border-zinc-300 p-3 text-sm shadow-2xl ring-1 ring-black/5"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <div className="flex justify-between items-start gap-2 mb-1">
+      <div className="font-medium text-zinc-900">
+        {state.items[openCommentId]?.name}
+      </div>
+      <button
+        onClick={() => { setOpenCommentId(null); setCommentPos(null); }}
+        title="Fermer"
+      >
+        <X className="w-4 h-4 text-zinc-700" />
+      </button>
+    </div>
+    <div className="whitespace-pre-wrap text-zinc-700">
+      {state.items[openCommentId]?.comment}
+    </div>
+  </div>
+)}
 
         {/* Drag overlay */}
         <DragOverlay>
