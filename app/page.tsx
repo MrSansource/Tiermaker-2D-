@@ -488,6 +488,34 @@ export default function TierList2D() {
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [draftComment, setDraftComment] = useState("");
   const commentRef = useRef<HTMLDivElement | null>(null);
+  // racine (pour clic global)
+const appRootRef = useRef<HTMLDivElement | null>(null);
+
+// désélection au clic “inutile”
+useEffect(() => {
+  function handleGlobalClick(ev: MouseEvent) {
+    const t = ev.target as HTMLElement | null;
+    if (!t) return;
+
+    // zones “utiles” -> ne pas désélectionner
+    const clickedUseful =
+      t.closest("[data-item-id]") ||          // tuile
+      t.closest("[data-cell-id]") ||          // cellule de la grille
+      t.closest("[data-pool-root]") ||        // bac
+      t.closest("[data-comment-panel]") ||    // panneau commentaire
+      t.closest("button,[role='button'],input,textarea,select,a,[contenteditable='true']");
+
+    if (clickedUseful) return;
+
+    // sinon : on ferme & on désélectionne
+    setOpenCommentId(null);
+    setIsEditingComment(false);
+    setSelectedId(null);
+  }
+  document.addEventListener("click", handleGlobalClick, true);
+  return () => document.removeEventListener("click", handleGlobalClick, true);
+}, []);
+
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -1057,7 +1085,7 @@ const alphaFilteredPoolIds = poolAlpha
 // ---- render ----
 // IMPORTANT: keep the leading semicolon to avoid ASI issues if the previous line ends with a parenthesis
 ;return (
-  <div className={cx("min-h-screen", T.pageBg, T.pageText)}>
+  <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
       {/* ====== Barre de titres + actions ====== */}
       <div className="flex items-center justify-between gap-4">
@@ -1403,6 +1431,7 @@ const alphaFilteredPoolIds = poolAlpha
     <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
       <Droppable id={state.poolId}>
         <div
+           data-pool-root="1"
           className="flex flex-wrap gap-2 p-2"
           style={{ contain: "layout paint" }}
           onClick={(e) => {
