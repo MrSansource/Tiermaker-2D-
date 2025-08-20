@@ -78,20 +78,26 @@ const NON_ALNUM_RE = /[^a-z0-9]+/g;                              // tout sauf a-
 const EDGE_DASH_RE = /(^-|-$)+/g;                                // tirets en bord
 
 // Remove diacritics & make a slug
-function slug(s: string): string {
+const slug = (s: string): string => {
   try {
-    return s
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(COMBINING_MARKS_RE, "")
+    return s.toLowerCase().trim()
+      .normalize("NFD").replace(COMBINING_MARKS_RE, "")
       .replace(NON_ALNUM_RE, "-")
       .replace(EDGE_DASH_RE, "");
   } catch {
     // fallback si normalize indisponible
-    return s.toLowerCase().trim().replace(NON_ALNUM_RE, "-").replace(EDGE_DASH_RE, "");
+    return s.toLowerCase().trim()
+      .replace(NON_ALNUM_RE, "-")
+      .replace(EDGE_DASH_RE, "");
   }
 };
+
+function normalizeText(s: string) {
+  return s.toLowerCase()
+    .normalize("NFD")
+    .replace(COMBINING_MARKS_RE, "");
+}
+
 
 // Alpha sorting helper for pool (French collator, accent-insensitive)
 const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
