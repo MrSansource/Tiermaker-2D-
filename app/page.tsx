@@ -62,15 +62,15 @@ const DEFAULT_COLS: Col[] = [
   { label: "Street Love",            color: "#ec4899" }, // pink 500
   { label: "Club",                   color: "#f59e0b" }, // amber 500
   { label: "Boom-bap old-school",    color: "#84cc16" }, // lime 500
-  { label: "DÃ©coupe new-school",     color: "#6366f1" }, // indigo 500
+  { label: "Découpe new-school",     color: "#6366f1" }, // indigo 500
   { label: "New-wave Electro-Pop",   color: "#06b6d4" }, // cyan 500
   { label: "Arty",                   color: "#a855f7" }, // purple 500
   { label: "Autre",                  color: "#94a3b8" }, // slate 400
 ];
 
 // Palette D (tuile): gris plus clair que le fond
-const TILE_BG = "#23242a"; // lÃ©gÃ¨rement plus clair que bg gÃ©nÃ©ral
-const TILE_BORDER = "#3f3f46"; // gris mÃ©dian
+const TILE_BG = "#23242a"; // légèrement plus clair que bg général
+const TILE_BORDER = "#3f3f46"; // gris médian
 
 // Précompile les regex (évite les soucis d'échappement \u)
 const COMBINING_MARKS_RE = new RegExp("[\\u0300-\\u036f]", "g"); // accents
@@ -129,10 +129,10 @@ function splitImport(text: string): string[] {
     .filter(Boolean);
 }
 
-// Parse "Nom  URL  Commentaire" (sÃ©parateurs: tab | , ; ou juste espaces)
-// - URL dÃ©tectÃ©e via /https?:\/\/\S+/
-// - Tout ce qui suit l'URL devient le commentaire (nettoyÃ©)
-// - S'il n'y a pas d'URL: on prend la 1re partie comme nom, le reste (si prÃ©sent) comme commentaire
+// Parse "Nom  URL  Commentaire" (séparateurs: tab | , ; ou juste espaces)
+// - URL détectée via /https?:\/\/\S+/
+// - Tout ce qui suit l'URL devient le commentaire (nettoyé)
+// - S'il n'y a pas d'URL: on prend la 1re partie comme nom, le reste (si présent) comme commentaire
 function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: Array<{ name: string; image?: string; comment?: string }> = [];
@@ -430,10 +430,10 @@ function runSelfTests() {
   const s1 = splitImport("A,B;C\tD\nE\r\nF");
   assert("splitImport handles , ; \t and newlines", s1.join("|") === "A|B|C|D|E|F");
 
-  const pp = parsePairs("Alpha\thttp://x/a.jpg\tPÃ©riode 2016-2019\nBeta | https://x/b.webp\nGamma");
+  const pp = parsePairs("Alpha\thttp://x/a.jpg\tPériode 2016-2019\nBeta | https://x/b.webp\nGamma");
   assert("parsePairs length", pp.length === 3);
   assert("parsePairs images detected", !!pp[0].image && !!pp[1].image && !pp[2].image);
-  assert("parsePairs comment captured", pp[0].comment === "PÃ©riode 2016-2019");
+  assert("parsePairs comment captured", pp[0].comment === "Période 2016-2019");
 
 
   const st = stateFromEntries([{ name: "Alpha" }, { name: "Beta", image: "http://x/b.jpg" }]);
@@ -591,7 +591,7 @@ function chipCls(active: boolean) {
     } catch {}
   }, [state, autoSyncURL]);
 
-  // (1) Quand on ouvre un commentaire, prÃ©parer le brouillon et sortir du mode Ã©dition
+  // (1) Quand on ouvre un commentaire, préparer le brouillon et sortir du mode édition
 useEffect(() => {
   if (!openCommentId) return;
   setIsEditingComment(false);
@@ -610,12 +610,12 @@ useEffect(() => {
     }
   };
 
-  // capture=true pour passer avant d'Ã©ventuels stopPropagation
+  // capture=true pour passer avant d'éventuels stopPropagation
   document.addEventListener("mousedown", onDown, true);
   return () => document.removeEventListener("mousedown", onDown, true);
 }, [openCommentId]);
 
-// (3) Recalculer la position du panneau au resize/scroll (si tu ne l'as pas dÃ©jÃ )
+// (3) Recalculer la position du panneau au resize/scroll (si tu ne l'as pas déjà )
 useEffect(() => {
   if (!openCommentId) return;
 
@@ -629,7 +629,7 @@ useEffect(() => {
     const gap = 8;
     const width = Math.max(rect.width * 2 + 16, 280);
 
-    // coordonnÃ©es viewport (panneau en position: fixed)
+    // coordonnées viewport (panneau en position: fixed)
     const left = Math.min(
       rect.right + gap,
       document.documentElement.clientWidth - width - 12
@@ -718,7 +718,7 @@ useEffect(() => {
     const gap = 8;
     const width = Math.max(rect.width * 2 + 16, 280);
 
-    // coordonnÃ©es viewport (position: fixed)
+    // coordonnées viewport (position: fixed)
     const leftCandidate = rect.right + gap;
     const maxLeft = document.documentElement.clientWidth - width - 12;
     const left = Math.min(leftCandidate, maxLeft);
@@ -784,7 +784,7 @@ function toggleCommentFor(id: string) {
   const maxTop = window.scrollY + document.documentElement.clientHeight - 100; // petite marge
   const top = Math.min(topCandidate, maxTop);
 
-  setCommentPos({ top, left, width });   // garde les mÃªmes clÃ©s que ton state actuel
+  setCommentPos({ top, left, width });   // garde les mêmes clés que ton state actuel
   setOpenCommentId(id);
 }
 
@@ -924,7 +924,7 @@ function clearGridKeepItems() {
     const url = `${location.origin}${location.pathname}#${enc}`;
     navigator.clipboard?.writeText(url);
     if (!copyOnly) history.replaceState(null, "", `#${enc}`);
-    alert("Lien copiÃ© dans le presse-papiers âœ¨");
+    alert("Lien copié dans le presse-papiers âœ¨");
   }
 
   // --- Seed publishing (to Vercel Blob via API) ---
@@ -942,12 +942,12 @@ function clearGridKeepItems() {
       try { localStorage.setItem('tier2d-last-seed-id', id); } catch {}
       const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
       await navigator.clipboard?.writeText(share);
-      alert(`Seed publiÃ© !
+      alert(`Seed publié !
 ID: ${id}
-Lien copiÃ© : ${share}`);
+Lien copié : ${share}`);
     } catch (e: any) {
-      alert(`Ã‰chec publication du seed. ${e?.message || ''}
-As-tu bien configurÃ© Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
+      alert(`Échec publication du seed. ${e?.message || ''}
+As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
     } finally { setPublishing(false); }
   }
 
@@ -965,12 +965,12 @@ As-tu bien configurÃ© Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
       if (mig) {
         setState(mig);
         if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
-        alert('Seed chargÃ© âœ”ï¸');
+        alert('Seed chargé âœ”ï¸');
       } else {
         alert('Seed invalide.');
       }
     } catch (e: any) {
-      alert(`Ã‰chec chargement du seed. ${e?.message || ''}`);
+      alert(`Échec chargement du seed. ${e?.message || ''}`);
     } finally { setLoadingSeed(false); }
   }
 function importPairs() {
@@ -1056,7 +1056,7 @@ function clearPool() {
   }, [selectedId]);
 
   // Grid template: header + dynamic cols (px)
-// === valeurs dÃ©rivÃ©es pour la grille & le bac ===
+// === valeurs dérivées pour la grille & le bac ===
 // === derived values used by the render (INSIDE the component) ===
 const colsPx = (state.colWidths?.length ? state.colWidths : Array(state.cols.length).fill(220))
   .map((w) => `${w}px`)
@@ -1073,10 +1073,10 @@ const filteredPoolIds = poolQuery
     )
   : poolIds;
 
-  // n'afficher la barre alphabÃ©tique que si beaucoup d'items
+  // n'afficher la barre alphabétique que si beaucoup d'items
 const showAlphaNav = filteredPoolIds.length > 1000;
 
-// filtre alphabÃ©tique (en plus du champ de recherche)
+// filtre alphabétique (en plus du champ de recherche)
 const alphaFilteredPoolIds = poolAlpha
   ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
   : filteredPoolIds;
@@ -1103,7 +1103,7 @@ const alphaFilteredPoolIds = poolAlpha
     <Scissors className="w-4 h-4 mr-2" /> Vider la grille
   </Button>
 
-  <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'Ã©tat en JSON">
+  <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'état en JSON">
     <Download className="w-4 h-4 mr-2" /> Exporter
   </Button>
 
@@ -1122,12 +1122,12 @@ const alphaFilteredPoolIds = poolAlpha
     />
   </label>
 
-  <Button onClick={() => shareURL(false)} title="Mettre l'Ã©tat dans l'URL et copier le lien">
+  <Button onClick={() => shareURL(false)} title="Mettre l'état dans l'URL et copier le lien">
     <Link2 className="w-4 h-4 mr-2" /> Partager le lien
   </Button>
 
-  <Button variant="destructive" onClick={resetAll} title="RÃ©initialiser complÃ¨tement">
-    <RefreshCcw className="w-4 h-4 mr-2" /> RÃ©initialiser
+  <Button variant="destructive" onClick={resetAll} title="Réinitialiser complètement">
+    <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
   </Button>
 
   {/* Recherche + trouver + effacer */}
@@ -1235,9 +1235,9 @@ const alphaFilteredPoolIds = poolAlpha
           className={OUTLINE_DARK}
           disabled={publishing || !lastSeedId}
           onClick={() => lastSeedId && publishSeed(lastSeedId)}
-          title={lastSeedId ? `Mettre Ã  jour le seed ${lastSeedId}` : "Aucun seed chargÃ©"}
+          title={lastSeedId ? `Mettre à  jour le seed ${lastSeedId}` : "Aucun seed chargé"}
         >
-          {publishing ? "Mise Ã  jour…" : "Mettre Ã  jour le seed"}
+          {publishing ? "Mise à  jour…" : "Mettre à  jour le seed"}
         </Button>
         {lastSeedId && (
           <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
@@ -1248,7 +1248,7 @@ const alphaFilteredPoolIds = poolAlpha
 </Card>
 
 
-     {/* ====== Axes & options (rÃ©tractable) ====== */}
+     {/* ====== Axes & options (rétractable) ====== */}
 <Card>
   <CardHeader className="flex items-center justify-between gap-2">
     <CardTitle>Axes & options</CardTitle>
@@ -1281,9 +1281,9 @@ const alphaFilteredPoolIds = poolAlpha
                 <div
                   className="px-3 py-2 rounded-md text-xs font-semibold text-center"
                   style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
-                  title="AperÃ§u"
+                  title="Aperçu"
                 >
-                  AperÃ§u
+                  Aperçu
                 </div>
                 <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
                   <Trash2 className="w-4 h-4" />
@@ -1310,9 +1310,9 @@ const alphaFilteredPoolIds = poolAlpha
                 <div
                   className="px-3 py-2 rounded-md text-xs font-semibold text-center"
                   style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
-                  title="AperÃ§u"
+                  title="Aperçu"
                 >
-                  AperÃ§u
+                  Aperçu
                 </div>
                 <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
                   <Trash2 className="w-4 h-4" />
@@ -1364,7 +1364,7 @@ const alphaFilteredPoolIds = poolAlpha
       id={id}
       onClick={() => {
         if (!selectedId) return;
-        if (getContainerByItem(selectedId) === id) return; // dÃ©jÃ  dedans
+        if (getContainerByItem(selectedId) === id) return; // déjà  dedans
         moveToContainer(selectedId, id);
       }}
     >
@@ -1486,7 +1486,7 @@ const alphaFilteredPoolIds = poolAlpha
       <div className="flex items-center gap-1">
         {!isEditingComment ? (
           <button
-            title="Ã‰diter le commentaire"
+            title="Éditer le commentaire"
             className="p-1 rounded hover:bg-zinc-100"
             onClick={() => {
               setDraftComment(state.items[openCommentId!]?.comment ?? "");
@@ -1585,7 +1585,7 @@ const alphaFilteredPoolIds = poolAlpha
   </CardHeader>
   <CardContent className="space-y-3">
     <p className={cx("text-sm", T.mutedText)}>
-      Une ligne par artiste. Formats acceptÃ©s :{" "}
+      Une ligne par artiste. Formats acceptés :{" "}
       <code>Nom    URL    Commentaire</code>,{" "}
       <code>Nom | URL | Commentaire</code>,{" "}
       <code>Nom,URL,Commentaire</code>,{" "}
@@ -1619,8 +1619,8 @@ PNL | https://exemple.com/pnl.webp`}
 
       <div className={cx("text-xs", T.mutedText)}>
         <p>
-          Persistance : l'Ã©tat est sauvegardÃ© dans votre navigateur et peut Ãªtre encodÃ© dans l'URL (bouton Â« Partager le lien Â»).
-          Pour un lien public stable, dÃ©ployez ce fichier sur Vercel.
+          Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton Â« Partager le lien Â»).
+          Pour un lien public stable, déployez ce fichier sur Vercel.
         </p>
       </div>
     </div>
