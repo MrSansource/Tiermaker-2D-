@@ -200,6 +200,7 @@ const INSTRUCTIONS: string[] = [
   "Pensez à exporter un JSON de sauvegarde de temps en temps (‘Exporter’)."
   ];
 
+;
 
 // =====================
 // Sortable tile (image + bouton commentaire discret)
