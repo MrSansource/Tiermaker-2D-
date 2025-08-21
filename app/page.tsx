@@ -49,7 +49,7 @@ type AppState = {
 const POOL_ID = "__pool__";
 
 const DEFAULT_ROWS: Row[] = [
-   { label: "GOATS",       color: "#f59e0b" }, // amber 500 (or) â€” gold
+   { label: "GOATS",       color: "#f59e0b" }, // amber 500 (or) — gold
   { label: "Excellent",   color: "#22c55e" }, // green 500
   { label: "Bon",         color: "#06b6d4" }, // cyan 500
   { label: "Moyen plus",  color: "#3b82f6" }, // blue 500
@@ -156,8 +156,8 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
         cleaned.startsWith(";") ||
         cleaned.startsWith(":") ||
         cleaned.startsWith("-") ||
-        cleaned.startsWith("â€“") ||
-        cleaned.startsWith("â€”")
+        cleaned.startsWith("–") ||
+        cleaned.startsWith("—")
       ) {
         cleaned = cleaned.slice(1).trim();
       }
@@ -189,16 +189,16 @@ const DARK = {
 const INPUT_DARK = "bg-zinc-800 text-zinc-100 border-zinc-700 placeholder:text-zinc-400";
 const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
 
-// ðŸ“ EDIT TIPS TEXT HERE â€” Texte de l'encart rÃ©tractable (modifiable par vous)
+// 📝 EDIT TIPS TEXT HERE —  Texte de l'encart rétractable (modifiable par vous)
 const INSTRUCTIONS: string[] = [
-  "Votre classement est sauvegardÃ© automatiquement dans CE navigateur (localStorage). RedÃ©marrer lâ€™ordinateur ne supprime pas ces donnÃ©es.",
-  "Pour retrouver votre travail sur un autre appareil : utilisez la section â€˜Seed (sauvegarde cloud)â€™.",
-  "1) Cliquez sur â€˜Publier (nouveau seed)â€™ : un ID et un lien ?seed=â€¦ sont gÃ©nÃ©rÃ©s. Ajoutez ce lien en favoris ou partagezâ€‘le.",
-  "2) Quand vous modifiez la tier list, cliquez sur â€˜Mettre Ã  jour le seedâ€™ pour enregistrer la nouvelle version sous le mÃªme ID.",
-  "3) Si quelquâ€™un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer â€˜Publier (nouveau seed)â€™ pour crÃ©er sa propre copie (son ID).",
-  "Astuce : le bouton â€˜Partager le lienâ€™ encode lâ€™Ã©tat DANS lâ€™URL (utile pour de petites listes). Pour 3â€¯500 items, prÃ©fÃ©rez les seeds.",
-  "Pensez Ã  exporter un JSON de sauvegarde de temps en temps (â€˜Exporterâ€™)."
-];
+  "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l’ordinateur ne supprime pas ces données.",
+  "Pour retrouver votre travail sur un autre appareil : utilisez la section ‘Seed (sauvegarde cloud)’.",
+  "1) Cliquez sur ‘Publier (nouveau seed)’ : un ID et un lien ?seed=… sont générés. Ajoutez ce lien en favoris ou partagez‑le.",
+  "2) Quand vous modifiez la tier list, cliquez sur ‘Mettre à jour le seed’ pour enregistrer la nouvelle version sous le même ID.",
+  "3) Si quelqu’un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer ‘Publier (nouveau seed)’ pour créer sa propre copie (son ID).",
+  "Astuce : le bouton ‘Partager le lien’ encode l’état DANS l’URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
+  "Pensez à exporter un JSON de sauvegarde de temps en temps (‘Exporter’)."
+
 
 // =====================
 // Sortable tile (image + bouton commentaire discret)
@@ -538,7 +538,7 @@ useEffect(() => {
     try { const sid = localStorage.getItem("tier2d-last-seed-id"); if (sid) setLastSeedId(sid); } catch {}
   }, []);
 
-// --- Navigation alphabÃ©tique du Bac ---
+// --- Navigation alphabétique du Bac ---
 // null = toutes les tranches
 const [poolAlpha, setPoolAlpha] = useState<string | null>(null);
 
@@ -546,7 +546,7 @@ const [poolAlpha, setPoolAlpha] = useState<string | null>(null);
 const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ"] as const;
 type AlphaKey = typeof ALPHA_BUCKETS[number];
 
-// DÃ©termine la tranche d'un nom
+// Détermine la tranche d'un nom
 function bucketForName(name: string): AlphaKey {
   const first = (name || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -554,7 +554,7 @@ function bucketForName(name: string): AlphaKey {
 
   if (first >= "0" && first <= "9") return "09";
 
-  const code = first.charCodeAt(0); // A=65 â€¦ Z=90
+  const code = first.charCodeAt(0); // A=65 … Z=90
   if (code >= 65 && code <= 90) {
     const pairs: [AlphaKey, number, number][] = [
       ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
@@ -565,7 +565,7 @@ function bucketForName(name: string): AlphaKey {
     for (const [key, a, b] of pairs) if (code === a || code === b) return key;
   }
 
-  // fallback (tu peux crÃ©er une tranche â€œAutresâ€ si tu veux)
+  // fallback (tu peux créer une tranche "Autres" si tu veux)
   return "YZ";
 }
 
@@ -775,7 +775,7 @@ function toggleCommentFor(id: string) {
   const gap = 8;
   const width = Math.max(rect.width * 2 + 16, 280);
 
-  // Position â€œpageâ€ (et pas â€œviewportâ€) -> lâ€™overlay dÃ©file avec la page
+  // Position “page” (et pas “viewport”) -> l'overlay défile avec la page
   const leftCandidate = rect.right + window.scrollX + gap;
   const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
   const left = Math.min(leftCandidate, maxLeft);
@@ -1089,7 +1089,7 @@ const alphaFilteredPoolIds = poolAlpha
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
       {/* ====== Barre de titres + actions ====== */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D â€“ Rap FR</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
         <div className="flex flex-wrap items-center gap-2">
   <Button
     variant="secondary"
@@ -1135,7 +1135,7 @@ const alphaFilteredPoolIds = poolAlpha
     className={INPUT_DARK + " w-44"}
     value={search}
     onChange={(e) => setSearch(e.target.value)}
-    placeholder="Rechercherâ€¦"
+    placeholder="Rechercher…"
   />
   <Button
     variant="outline"
@@ -1225,10 +1225,10 @@ const alphaFilteredPoolIds = poolAlpha
           onChange={(e) => setSeedInput(e.target.value)}
         />
         <Button variant="outline" className={OUTLINE_DARK} disabled={loadingSeed} onClick={() => loadSeed(seedInput)}>
-          {loadingSeed ? "Chargementâ€¦" : "Charger seed"}
+          {loadingSeed ? "Chargement…" : "Charger seed"}
         </Button>
         <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
-          {publishing ? "Publicationâ€¦" : "Publier (nouveau seed)"}
+          {publishing ? "Publication…" : "Publier (nouveau seed)"}
         </Button>
         <Button
           variant="outline"
@@ -1237,7 +1237,7 @@ const alphaFilteredPoolIds = poolAlpha
           onClick={() => lastSeedId && publishSeed(lastSeedId)}
           title={lastSeedId ? `Mettre Ã  jour le seed ${lastSeedId}` : "Aucun seed chargÃ©"}
         >
-          {publishing ? "Mise Ã  jourâ€¦" : "Mettre Ã  jour le seed"}
+          {publishing ? "Mise Ã  jour…" : "Mettre Ã  jour le seed"}
         </Button>
         {lastSeedId && (
           <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
@@ -1266,7 +1266,7 @@ const alphaFilteredPoolIds = poolAlpha
     <CardContent className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label className="mb-2 block">Axe vertical (lignes) â€” texte & couleur</Label>
+          <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
           <div className="space-y-2">
             {state.rows.map((r, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
@@ -1295,7 +1295,7 @@ const alphaFilteredPoolIds = poolAlpha
         </div>
 
         <div>
-          <Label className="mb-2 block">Axe horizontal (colonnes) â€” texte & couleur</Label>
+          <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
           <div className="space-y-2">
             {state.cols.map((c, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
@@ -1553,7 +1553,7 @@ const alphaFilteredPoolIds = poolAlpha
         onChange={(e) => setDraftComment(e.target.value)}
         className="w-full rounded-md border border-zinc-300 bg-white text-zinc-900 px-2 py-1 text-sm
                    focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        placeholder="Ã‰cris ton commentaire iciâ€¦"
+        placeholder=Écris ton commentaire ici…"
         autoFocus
       />
     )}
@@ -1589,7 +1589,7 @@ const alphaFilteredPoolIds = poolAlpha
       <code>Nom    URL    Commentaire</code>,{" "}
       <code>Nom | URL | Commentaire</code>,{" "}
       <code>Nom,URL,Commentaire</code>,{" "}
-      <code>Nom;URL;Commentaire</code>. Lâ€™image et le commentaire sont optionnels.
+      <code>Nom;URL;Commentaire</code>. L'image et le commentaire sont optionnels.
     </p>
 
     <Textarea
@@ -1615,7 +1615,7 @@ PNL | https://exemple.com/pnl.webp`}
   </CardContent>
 </Card>
           
-      {/* â€¦ ta carte dâ€™import â€¦ */}
+      {/* … ta carte d'import … */}
 
       <div className={cx("text-xs", T.mutedText)}>
         <p>
