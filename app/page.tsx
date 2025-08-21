@@ -1465,101 +1465,129 @@ const alphaFilteredPoolIds = poolAlpha
 </Card>
 
 
-        {/* Panneau commentaire global */}
-     {openCommentId && commentPos && (
+        {/* ===== Comment panel (viewer / editor) ===== */}
+{openCommentId && (
   <div
+    data-comment-panel
     ref={commentRef}
-    style={{
-      position: "fixed",
-      top: commentPos.top,
-      left: commentPos.left,
-      width: commentPos.width,
-      zIndex: 1000,
-    }}
-    className="rounded-xl bg-white text-zinc-900 border border-zinc-300 p-3 text-sm shadow-2xl ring-1 ring-black/5"
-    onClick={(e) => e.stopPropagation()}
+    className="fixed z-50 right-4 top-24 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
+    onClick={(e) => e.stopPropagation()} // ne pas déclencher la désélection globale
+    role="dialog"
+    aria-modal="true"
   >
-    <div className="flex justify-between items-start gap-2 mb-2">
-      <div className="font-medium truncate pr-2">
-        {state.items[openCommentId]?.name}
+    {/* Header */}
+    <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200">
+      <div className="min-w-0">
+        <div className="text-xs uppercase tracking-wider text-zinc-500">Commentaire</div>
+        <div className="font-semibold truncate">
+          {state.items[openCommentId]?.name ?? openCommentId}
+        </div>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         {!isEditingComment ? (
           <button
-            title="Éditer le commentaire"
-            className="p-1 rounded hover:bg-zinc-100"
+            type="button"
+            className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
             onClick={() => {
-              setDraftComment(state.items[openCommentId!]?.comment ?? "");
+              setDraftComment(state.items[openCommentId]?.comment ?? "");
               setIsEditingComment(true);
             }}
           >
-            <Pencil className="w-4 h-4" />
+            Éditer
           </button>
         ) : (
           <>
             <button
-              title="Enregistrer"
-              className="p-1 rounded hover:bg-green-50"
+              type="button"
+              className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
               onClick={() => {
-                const id = openCommentId!;
-                const newText = draftComment.trim();
-                setState((s) => {
-                  const it = s.items[id];
-                  if (!it) return s;
-                  return {
-                    ...s,
-                    items: {
-                      ...s.items,
-                      [id]: { ...it, comment: newText || undefined },
-                    },
-                  };
-                });
+                // Annuler édition
                 setIsEditingComment(false);
+                setDraftComment("");
               }}
             >
-              <Check className="w-4 h-4" />
+              Annuler
             </button>
             <button
-              title="Annuler"
-              className="p-1 rounded hover:bg-zinc-100"
+              type="button"
+              className="px-2 py-1 text-sm rounded-md bg-amber-500 text-black hover:bg-amber-400"
               onClick={() => {
-                setDraftComment(state.items[openCommentId!]?.comment ?? "");
+                if (!openCommentId) return;
+                const value = draftComment.trim();
+                setState((s) => {
+                  const items = { ...s.items };
+                  if (items[openCommentId]) {
+                    items[openCommentId] = {
+                      ...items[openCommentId],
+                      comment: value || undefined,
+                    };
+                  }
+                  return { ...s, items };
+                });
                 setIsEditingComment(false);
+                setDraftComment("");
               }}
             >
-              <X className="w-4 h-4" />
+              Enregistrer
             </button>
           </>
         )}
 
+        {/* Supprimer le commentaire */}
         <button
-          title="Fermer"
-          className="p-1 rounded hover:bg-zinc-100"
-          onClick={() => { setOpenCommentId(null); setCommentPos(null); setIsEditingComment(false); }}
+          type="button"
+          className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+          onClick={() => {
+            if (!openCommentId) return;
+            setState((s) => {
+              const items = { ...s.items };
+              if (items[openCommentId]) {
+                items[openCommentId] = { ...items[openCommentId], comment: undefined };
+              }
+              return { ...s, items };
+            });
+            setIsEditingComment(false);
+            setDraftComment("");
+          }}
         >
-          <X className="w-4 h-4" />
+          Supprimer
+        </button>
+
+        {/* Fermer */}
+        <button
+          type="button"
+          className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+          onClick={() => {
+            setOpenCommentId(null);
+            setIsEditingComment(false);
+            setDraftComment("");
+          }}
+        >
+          ×
         </button>
       </div>
     </div>
 
-    {!isEditingComment ? (
-      <div className="whitespace-pre-wrap text-zinc-700">
-        {state.items[openCommentId]?.comment || <span className="text-zinc-400">Aucun commentaire.</span>}
-      </div>
-    ) : (
-      <textarea
-        rows={5}
-        value={draftComment}
-        onChange={(e) => setDraftComment(e.target.value)}
-        className="w-full rounded-md border border-zinc-300 bg-white text-zinc-900 px-2 py-1 text-sm
-                   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        placeholder=Écris ton commentaire ici…"
-        autoFocus
-      />
-    )}
+    {/* Corps */}
+    <div className="p-3 text-sm leading-relaxed">
+      {!isEditingComment ? (
+        <div className="whitespace-pre-wrap">
+          {state.items[openCommentId]?.comment || <span className="text-zinc-500">—</span>}
+        </div>
+      ) : (
+        <Textarea
+          value={draftComment}
+          onChange={(e) => setDraftComment(e.target.value)}
+          rows={8}
+          className="w-full"
+          placeholder="Écris ton commentaire ici…"
+        />
+      )}
+    </div>
   </div>
 )}
+
 
         {/* Drag overlay */}
         <DragOverlay>
