@@ -198,6 +198,7 @@ const INSTRUCTIONS: string[] = [
   "3) Si quelqu’un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer ‘Publier (nouveau seed)’ pour créer sa propre copie (son ID).",
   "Astuce : le bouton ‘Partager le lien’ encode l’état DANS l’URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
   "Pensez à exporter un JSON de sauvegarde de temps en temps (‘Exporter’)."
+  ];
 
 
 // =====================
