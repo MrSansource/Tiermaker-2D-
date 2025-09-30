@@ -540,22 +540,24 @@ useEffect(() => {
 
 // --- Navigation alphabétique du Bac ---
 // null = toutes les tranches
-const [poolAlpha, setPoolAlpha] = useState<string | null>(null);
+const [poolAlpha, setPoolAlpha] = useState<string | null>("AB");
 
 // Paires de tranches
-const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ"] as const;
+const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ","Autres"] as const;
 type AlphaKey = typeof ALPHA_BUCKETS[number];
 
 // Détermine la tranche d'un nom
 function bucketForName(name: string): AlphaKey {
-  const first = (name || "")
+  const normalized = (name || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .trim().toUpperCase().charAt(0);
+    .trim().toUpperCase();
+  
+  const first = normalized.charAt(0);
 
   if (first >= "0" && first <= "9") return "09";
 
-  const code = first.charCodeAt(0); // A=65 … Z=90
-  if (code >= 65 && code <= 90) {
+  const code = first.charCodeAt(0);
+  if (code >= 65 && code <= 90) { // A-Z
     const pairs: [AlphaKey, number, number][] = [
       ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
       ["IJ",73,74],["KL",75,76],["MN",77,78],["OP",79,80],
@@ -565,8 +567,8 @@ function bucketForName(name: string): AlphaKey {
     for (const [key, a, b] of pairs) if (code === a || code === b) return key;
   }
 
-  // fallback (tu peux créer une tranche "Autres" si tu veux)
-  return "YZ";
+  // Tout ce qui n'est ni 0-9 ni A-Z → "Autres"
+  return "Autres";
 }
 
 // Look d'une puce de tranche
