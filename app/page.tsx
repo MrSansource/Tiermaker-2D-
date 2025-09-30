@@ -975,7 +975,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
       if (mig) {
         setState(mig);
         if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
-        alert('Seed chargée);
+        alert('Seed chargée');
       } else {
         alert('Seed invalide.');
       }
@@ -1230,7 +1230,7 @@ const alphaFilteredPoolIds = poolAlpha
       <div className="flex flex-wrap items-center gap-2">
         <Input
           className={INPUT_DARK + " w-56"}
-          placeholder="ID du seed ou URL"
+          placeholder="ID de la seed ou URL"
           value={seedInput}
           onChange={(e) => setSeedInput(e.target.value)}
         />
@@ -1238,16 +1238,16 @@ const alphaFilteredPoolIds = poolAlpha
           {loadingSeed ? "Chargement…" : "Charger seed"}
         </Button>
         <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
-          {publishing ? "Publication…" : "Publier (nouveau seed)"}
+          {publishing ? "Publication…" : "Publier (nouvelle seed)"}
         </Button>
         <Button
           variant="outline"
           className={OUTLINE_DARK}
           disabled={publishing || !lastSeedId}
           onClick={() => lastSeedId && publishSeed(lastSeedId)}
-          title={lastSeedId ? `Mettre à  jour le seed ${lastSeedId}` : "Aucun seed chargé"}
+          title={lastSeedId ? `Mettre à  jour le seed ${lastSeedId}` : "Aucune seed chargée"}
         >
-          {publishing ? "Mise à  jour…" : "Mettre à  jour le seed"}
+          {publishing ? "Mise à  jour…" : "Mettre à  jour la seed"}
         </Button>
         {lastSeedId && (
           <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
