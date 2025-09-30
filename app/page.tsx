@@ -766,6 +766,7 @@ function toggleCommentFor(id: string) {
   if (openCommentId === id) {
     setOpenCommentId(null);
     setCommentPos(null);
+    setIsEditingComment(false);
     return;
   }
   const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
@@ -775,17 +776,24 @@ function toggleCommentFor(id: string) {
   const gap = 8;
   const width = Math.max(rect.width * 2 + 16, 280);
 
-  // Position “page” (et pas “viewport”) -> l'overlay défile avec la page
   const leftCandidate = rect.right + window.scrollX + gap;
   const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
   const left = Math.min(leftCandidate, maxLeft);
 
   const topCandidate = rect.top + window.scrollY - 4;
-  const maxTop = window.scrollY + document.documentElement.clientHeight - 100; // petite marge
+  const maxTop = window.scrollY + document.documentElement.clientHeight - 100;
   const top = Math.min(topCandidate, maxTop);
 
-  setCommentPos({ top, left, width });   // garde les mêmes clés que ton state actuel
+  setCommentPos({ top, left, width });
   setOpenCommentId(id);
+  setSelectedId(null); // désélectionner
+  
+  // Passer en mode édition si commentaire vide
+  const hasComment = state.items[id]?.comment?.trim();
+  if (!hasComment) {
+    setIsEditingComment(true);
+    setDraftComment("");
+  }
 }
 
 
