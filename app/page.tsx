@@ -1141,68 +1141,7 @@ const alphaFilteredPoolIds = poolAlpha
   </Button>
 
   {/* Recherche + trouver + effacer */}
-  <Input
-    className={INPUT_DARK + " w-44"}
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    placeholder="Rechercher…"
-  />
-  <Button
-    variant="outline"
-    className={OUTLINE_DARK}
-    onClick={() => {
-      const id = Array.from(matchedIds)[0];
-      if (!id) return;
-      const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
-      el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    }}
-  >
-    Trouver
-  </Button>
-  {search && (
-    <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
-      Effacer
-    </Button>
-  )}
 
-  <div className="w-px h-6 bg-zinc-700 mx-1" />
-
-  {/* Commentaires + suppression tuile */}
-  <Button
-    variant="outline"
-    className={OUTLINE_DARK}
-    disabled={!selectedId}
-    onClick={() => selectedId && toggleCommentFor(selectedId)}
-  >
-    Ajouter / ouvrir un commentaire
-  </Button>
-  <Button
-    variant="outline"
-    className={OUTLINE_DARK}
-    disabled={!selectedId || !state.items[selectedId!]?.comment}
-    onClick={() => {
-      if (!selectedId) return;
-      setState(prev => {
-        const items = { ...prev.items };
-        if (items[selectedId]) {
-          items[selectedId] = { ...items[selectedId] };
-          delete items[selectedId].comment;
-        }
-        return { ...prev, items } as AppState;
-      });
-      if (openCommentId === selectedId) { setOpenCommentId(null); setCommentPos(null); }
-    }}
-  >
-    Supprimer le commentaire
-  </Button>
-  <Button
-    variant="outline"
-    className={OUTLINE_DARK}
-    disabled={!selectedId}
-    onClick={() => selectedId && deleteItem(selectedId)}
-  >
-    Supprimer la tuile
-  </Button>
 </div>
 </div>
 
@@ -1337,7 +1276,82 @@ const alphaFilteredPoolIds = poolAlpha
   )}
 </Card>
 
+</Card>
 
+{/* Nouvelle section : Actions sur les tuiles */}
+<Card>
+  <CardHeader>
+    <CardTitle>Actions sur les tuiles</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        className={INPUT_DARK + " w-44"}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Rechercher…"
+      />
+      <Button
+        variant="outline"
+        className={OUTLINE_DARK}
+        onClick={() => {
+          const id = Array.from(matchedIds)[0];
+          if (!id) return;
+          const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+          el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+        }}
+      >
+        Trouver
+      </Button>
+      {search && (
+        <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
+          Effacer
+        </Button>
+      )}
+
+      <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+      <Button
+        variant="outline"
+        className={OUTLINE_DARK}
+        disabled={!selectedId}
+        onClick={() => selectedId && toggleCommentFor(selectedId)}
+      >
+        Ajouter / ouvrir un commentaire
+      </Button>
+      <Button
+        variant="outline"
+        className={OUTLINE_DARK}
+        disabled={!selectedId || !state.items[selectedId!]?.comment}
+        onClick={() => {
+          if (!selectedId) return;
+          setState(prev => {
+            const items = { ...prev.items };
+            if (items[selectedId]) {
+              items[selectedId] = { ...items[selectedId] };
+              delete items[selectedId].comment;
+            }
+            return { ...prev, items } as AppState;
+          });
+          if (openCommentId === selectedId) { setOpenCommentId(null); setCommentPos(null); }
+        }}
+      >
+        Supprimer le commentaire
+      </Button>
+      <Button
+        variant="outline"
+        className={OUTLINE_DARK}
+        disabled={!selectedId}
+        onClick={() => selectedId && deleteItem(selectedId)}
+      >
+        Supprimer la tuile
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+
+{/* ====== Grille + Bac + Panneau commentaire ====== */}
+      
       {/* ====== Grille + Bac + Panneau commentaire ====== */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
         {/* Grille */}
