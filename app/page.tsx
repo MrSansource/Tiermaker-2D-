@@ -975,7 +975,7 @@ As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
       if (mig) {
         setState(mig);
         if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
-        alert('Seed chargé âœ”ï¸');
+        alert('Seed chargée);
       } else {
         alert('Seed invalide.');
       }
