@@ -191,16 +191,14 @@ const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
 
 // 📝 EDIT TIPS TEXT HERE —  Texte de l'encart rétractable (modifiable par vous)
 const INSTRUCTIONS: string[] = [
-  "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l’ordinateur ne supprime pas ces données.",
-  "Pour retrouver votre travail sur un autre appareil : utilisez la section ‘Seed (sauvegarde cloud)’.",
-  "1) Cliquez sur ‘Publier (nouveau seed)’ : un ID et un lien ?seed=… sont générés. Ajoutez ce lien en favoris ou partagez‑le.",
-  "2) Quand vous modifiez la tier list, cliquez sur ‘Mettre à jour le seed’ pour enregistrer la nouvelle version sous le même ID.",
-  "3) Si quelqu’un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer ‘Publier (nouveau seed)’ pour créer sa propre copie (son ID).",
-  "Astuce : le bouton ‘Partager le lien’ encode l’état DANS l’URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
-  "Pensez à exporter un JSON de sauvegarde de temps en temps (‘Exporter’)."
-  ];
-
-;
+  "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l'ordinateur ne supprime pas ces données.",
+  "Pour retrouver votre travail sur un autre appareil : utilisez la section 'Seed (sauvegarde cloud)'.",
+  "1) Cliquez sur 'Publier (nouveau seed)' : un ID et un lien ?seed=… sont générés. Ajoutez ce lien en favoris ou partagez‑le.",
+  "2) Quand vous modifiez la tier list, cliquez sur 'Mettre à jour le seed' pour enregistrer la nouvelle version sous le même ID.",
+  "3) Si quelqu'un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer 'Publier (nouveau seed)' pour créer sa propre copie (son ID).",
+  "Astuce : le bouton 'Partager le lien' encode l'état DANS l'URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
+  "Pensez à exporter un JSON de sauvegarde de temps en temps ('Exporter')."
+]; // ← AJOUTE CE POINT-VIRGULE
 
 // =====================
 // Sortable tile (image + bouton commentaire discret)
