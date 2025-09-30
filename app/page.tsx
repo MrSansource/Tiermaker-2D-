@@ -1140,11 +1140,6 @@ const alphaFilteredPoolIds = poolAlpha
     <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
   </Button>
 
-  {/* Recherche + trouver + effacer */}
-
-</div>
-</div>
-
       {/* ====== Mode d'emploi / Seed ====== */}
    {/* ====== Mode d'emploi / Sauvegarde & partage ====== */}
 <Card>
