@@ -1368,14 +1368,20 @@ const alphaFilteredPoolIds = poolAlpha
                     <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
                       <CardContent className={cx("p-2", T.cardBg)}>
   <SortableContext items={items} strategy={rectSortingStrategy}>
-    <Droppable
-      id={id}
-      onClick={() => {
-        if (!selectedId) return;
-        if (getContainerByItem(selectedId) === id) return; // déjà  dedans
-        moveToContainer(selectedId, id);
-      }}
-    >
+   <Droppable
+  id={id}
+  onClick={() => {
+    if (!selectedId) return;
+    const currentContainer = getContainerByItem(selectedId);
+    if (currentContainer === id) {
+      // Clic dans la même cellule → désélectionner
+      setSelectedId(null);
+      return;
+    }
+    // Sinon déplacer
+    moveToContainer(selectedId, id);
+  }}
+>
       <div
         className="relative w-full flex flex-wrap gap-2"
         style={{ minHeight: 120 }}
@@ -1438,18 +1444,22 @@ const alphaFilteredPoolIds = poolAlpha
   <CardContent className={T.cardBg}>
     <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
       <Droppable id={state.poolId}>
-        <div
-           data-pool-root="1"
-          className="flex flex-wrap gap-2 p-2"
-          style={{ contain: "layout paint" }}
-          onClick={(e) => {
-            // ignorer si clic sur une tuile
-            if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
-            if (!selectedId) return;
-            if (getContainerByItem(selectedId) === state.poolId) return; // déjà au bac
-            moveToContainer(selectedId, state.poolId);
-          }}
-        >
+<div
+  data-pool-root="1"
+  className="flex flex-wrap gap-2 p-2"
+  style={{ contain: "layout paint" }}
+  onClick={(e) => {
+    if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
+    if (!selectedId) return;
+    const currentContainer = getContainerByItem(selectedId);
+    if (currentContainer === state.poolId) {
+      // Déjà dans le bac → désélectionner
+      setSelectedId(null);
+      return;
+    }
+    moveToContainer(selectedId, state.poolId);
+  }}
+>
           {alphaFilteredPoolIds.map((itemId) => (
             <Tile
               key={itemId}
