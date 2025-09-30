@@ -1429,16 +1429,16 @@ const alphaFilteredPoolIds = poolAlpha
         >
           Tous
         </button>
-        {ALPHA_BUCKETS.map((k) => (
-          <button
-            key={k}
-            className={chipCls(poolAlpha === k)}
-            onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
-            title={`Filtrer: ${k[0]}–${k[1]}`}
-          >
-            {k[0]}–{k[1]}
-          </button>
-        ))}
+{ALPHA_BUCKETS.map((k) => (
+  <button
+    key={k}
+    className={chipCls(poolAlpha === k)}
+    onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
+    title={k === "Autres" ? "Filtrer: symboles & autres" : `Filtrer: ${k[0]}–${k[1]}`}
+  >
+    {k === "Autres" ? "Autres" : `${k[0]}–${k[1]}`}
+  </button>
+))}
       </div>
     )}
   </CardHeader>
