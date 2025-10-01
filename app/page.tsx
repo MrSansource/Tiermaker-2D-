@@ -20,26 +20,38 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Pencil, Check } from "lucide-react";
+import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Edit } from "lucide-react";
 
 // =====================
 // Types
 // =====================
 
-type Item = { id: string; name: string; image?: string; comment?: string };
+type Tier = { label: string; color: string };
 
-type Row = { label: string; color: string };
-type Col = { label: string; color: string };
+type AxisDefinition = {
+  id: string;
+  label: string;
+  tiers: Tier[];
+  tierWidths?: number[];
+};
+
+type Item = {
+  id: string;
+  name: string;
+  image?: string;
+  comment?: string;
+  axisPositions: Record<string, number | null>;
+};
 
 type AppState = {
-  rows: Row[];
-  cols: Col[];
-  colWidths: number[]; // px per column
-  containers: Record<string, string[]>; // containerId -> item ids
-  items: Record<string, Item>; // id -> item
-  poolId: string; // id of the pool container
-  tileSize: number; // px
-  forceDark: boolean; // theme (always true)
+  axes: AxisDefinition[];
+  activeVerticalAxisId: string;
+  activeHorizontalAxisId: string;
+  containers: Record<string, string[]>;
+  items: Record<string, Item>;
+  poolId: string;
+  tileSize: number;
+  forceDark: boolean;
 };
 
 // =====================
@@ -48,36 +60,31 @@ type AppState = {
 
 const POOL_ID = "__pool__";
 
-const DEFAULT_ROWS: Row[] = [
-   { label: "GOATS",       color: "#f59e0b" }, // amber 500 (or) — gold
-  { label: "Excellent",   color: "#22c55e" }, // green 500
-  { label: "Bon",         color: "#06b6d4" }, // cyan 500
-  { label: "Moyen plus",  color: "#3b82f6" }, // blue 500
-  { label: "Moyen",       color: "#a855f7" }, // purple 500
-  { label: "Mauvais",     color: "#f97316" }, // orange 500
-  { label: "Trash",       color: "#ef4444" }, // red 500
-];
-const DEFAULT_COLS: Col[] = [
-  { label: "Street",                 color: "#0ea5e9" }, // sky 500
-  { label: "Street Love",            color: "#ec4899" }, // pink 500
-  { label: "Club",                   color: "#f59e0b" }, // amber 500
-  { label: "Boom-bap old-school",    color: "#84cc16" }, // lime 500
-  { label: "Découpe new-school",     color: "#6366f1" }, // indigo 500
-  { label: "New-wave Electro-Pop",   color: "#06b6d4" }, // cyan 500
-  { label: "Arty",                   color: "#a855f7" }, // purple 500
-  { label: "Autre",                  color: "#94a3b8" }, // slate 400
+const DEFAULT_ROWS: Tier[] = [
+  { label: "GOATS", color: "#f59e0b" },
+  { label: "Excellent", color: "#22c55e" },
+  { label: "Bon", color: "#06b6d4" },
+  { label: "Moyen plus", color: "#3b82f6" },
+  { label: "Moyen", color: "#a855f7" },
+  { label: "Mauvais", color: "#f97316" },
+  { label: "Trash", color: "#ef4444" },
 ];
 
-// Palette D (tuile): gris plus clair que le fond
-const TILE_BG = "#23242a"; // légèrement plus clair que bg général
-const TILE_BORDER = "#3f3f46"; // gris médian
+const DEFAULT_COLS: Tier[] = [
+  { label: "Street", color: "#0ea5e9" },
+  { label: "Street Love", color: "#ec4899" },
+  { label: "Club", color: "#f59e0b" },
+  { label: "Boom-bap old-school", color: "#84cc16" },
+  { label: "Découpe new-school", color: "#6366f1" },
+  { label: "New-wave Electro-Pop", color: "#06b6d4" },
+  { label: "Arty", color: "#a855f7" },
+  { label: "Autre", color: "#94a3b8" },
+];
 
-// Précompile les regex (évite les soucis d'échappement \u)
-const COMBINING_MARKS_RE = new RegExp("[\\u0300-\\u036f]", "g"); // accents
-const NON_ALNUM_RE = /[^a-z0-9]+/g;                              // tout sauf a-z0-9
-const EDGE_DASH_RE = /(^-|-$)+/g;                                // tirets en bord
+const COMBINING_MARKS_RE = /[\u0300-\u036f]/g;
+const NON_ALNUM_RE = /[^a-z0-9]+/g;
+const EDGE_DASH_RE = /(^-|-$)+/g;
 
-// Remove diacritics & make a slug
 const slug = (s: string): string => {
   try {
     return s.toLowerCase().trim()
@@ -85,7 +92,6 @@ const slug = (s: string): string => {
       .replace(NON_ALNUM_RE, "-")
       .replace(EDGE_DASH_RE, "");
   } catch {
-    // fallback si normalize indisponible
     return s.toLowerCase().trim()
       .replace(NON_ALNUM_RE, "-")
       .replace(EDGE_DASH_RE, "");
@@ -93,13 +99,9 @@ const slug = (s: string): string => {
 };
 
 function normalizeText(s: string) {
-  return s.toLowerCase()
-    .normalize("NFD")
-    .replace(COMBINING_MARKS_RE, "");
+  return s.toLowerCase().normalize("NFD").replace(COMBINING_MARKS_RE, "");
 }
 
-
-// Alpha sorting helper for pool (French collator, accent-insensitive)
 const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
 function sortIdsAlpha(ids: string[], items: Record<string, Item>) {
   return [...ids].sort((a, b) => collator.compare(
@@ -122,17 +124,6 @@ function textColorForBg(hex: string) {
   }
 }
 
-function splitImport(text: string): string[] {
-  return text
-    .split(/\r?\n|,|;|\t/g)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-// Parse "Nom  URL  Commentaire" (séparateurs: tab | , ; ou juste espaces)
-// - URL détectée via /https?:\/\/\S+/
-// - Tout ce qui suit l'URL devient le commentaire (nettoyé)
-// - S'il n'y a pas d'URL: on prend la 1re partie comme nom, le reste (si présent) comme commentaire
 function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: Array<{ name: string; image?: string; comment?: string }> = [];
@@ -141,27 +132,14 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
     const m = line.match(/https?:\/\/\S+/);
     if (m) {
       const url = m[0];
-      const before = line.slice(0, (m.index as number)).trim();
-      const name = before
-        .split(/[|;,\t]/)
-        .join(" ")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-
+      const before = line.slice(0, m.index as number).trim();
+      const name = before.split(/[|;,\t]/).join(" ").replace(/\s{2,}/g, " ").trim();
       const after = line.slice((m.index as number) + url.length);
       let cleaned = after.trim();
-      while (
-        cleaned.startsWith("|") ||
-        cleaned.startsWith(",") ||
-        cleaned.startsWith(";") ||
-        cleaned.startsWith(":") ||
-        cleaned.startsWith("-") ||
-        cleaned.startsWith("–") ||
-        cleaned.startsWith("—")
-      ) {
+      while (cleaned.startsWith("|") || cleaned.startsWith(",") || cleaned.startsWith(";") || 
+             cleaned.startsWith(":") || cleaned.startsWith("-") || cleaned.startsWith("–") || cleaned.startsWith("—")) {
         cleaned = cleaned.slice(1).trim();
       }
-
       out.push({ name: name || url, image: url, comment: cleaned || undefined });
     } else {
       const parts = line.split(/[|;,\t]/);
@@ -185,11 +163,9 @@ const DARK = {
   mutedText: "text-zinc-400",
 };
 
-// Dark UI utilities
 const INPUT_DARK = "bg-zinc-800 text-zinc-100 border-zinc-700 placeholder:text-zinc-400";
 const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
 
-// 📝 EDIT TIPS TEXT HERE —  Texte de l'encart rétractable (modifiable par vous)
 const INSTRUCTIONS: string[] = [
   "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l'ordinateur ne supprime pas ces données.",
   "Pour retrouver votre travail sur un autre appareil : utilisez la section 'Seed (sauvegarde cloud)'.",
@@ -198,33 +174,44 @@ const INSTRUCTIONS: string[] = [
   "3) Si quelqu'un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer 'Publier (nouveau seed)' pour créer sa propre copie (son ID).",
   "Astuce : le bouton 'Partager le lien' encode l'état DANS l'URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
   "Pensez à exporter un JSON de sauvegarde de temps en temps ('Exporter')."
-]; // ← AJOUTE CE POINT-VIRGULE
+];
+
+const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ","Autres"] as const;
+type AlphaKey = typeof ALPHA_BUCKETS[number];
+
+function bucketForName(name: string): AlphaKey {
+  const normalized = (name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+  const first = normalized.charAt(0);
+  if (first >= "0" && first <= "9") return "09";
+  const code = first.charCodeAt(0);
+  if (code >= 65 && code <= 90) {
+    const pairs: [AlphaKey, number, number][] = [
+      ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
+      ["IJ",73,74],["KL",75,76],["MN",77,78],["OP",79,80],
+      ["QR",81,82],["ST",83,84],["UV",85,86],["WX",87,88],
+      ["YZ",89,90],
+    ];
+    for (const [key, a, b] of pairs) if (code === a || code === b) return key;
+  }
+  return "Autres";
+}
+
+function chipCls(active: boolean) {
+  return [
+    "px-2 py-1 rounded-md text-xs border",
+    active ? "bg-zinc-200 text-zinc-900 border-zinc-300" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
+  ].join(" ");
+}
 
 // =====================
-// Sortable tile (image + bouton commentaire discret)
+// Tile Component
 // =====================
 function Tile({
-  id,
-  name,
-  image,
-  comment,
-  tileSize,
-  selected,
-  highlighted,
-  onClick,
-  isCommentOpen,
-  onCommentToggle,
+  id, name, image, comment, tileSize, selected, highlighted, onClick, isCommentOpen, onCommentToggle,
 }: {
-  id: string;
-  name: string;
-  image?: string;
-  comment?: string;
-  tileSize: number;
-  selected?: boolean;
-  highlighted?: boolean;
-  onClick?: () => void;
-  isCommentOpen?: boolean;
-  onCommentToggle?: (id: string) => void;
+  id: string; name: string; image?: string; comment?: string; tileSize: number;
+  selected?: boolean; highlighted?: boolean; onClick?: () => void;
+  isCommentOpen?: boolean; onCommentToggle?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -260,9 +247,7 @@ function Tile({
             referrerPolicy="no-referrer"
             loading="lazy"
             className="absolute inset-0 w-full h-full object-cover rounded-2xl"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
             <span className="font-semibold text-white drop-shadow-sm px-1">{name}</span>
@@ -272,31 +257,19 @@ function Tile({
         <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
       )}
 
-      {/* Bouton discret pour ouvrir/fermer le panneau global de commentaire */}
       {comment && (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onCommentToggle?.(id);
-          }}
+          onClick={(e) => { e.stopPropagation(); onCommentToggle?.(id); }}
           className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
           title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
         >
-          {isCommentOpen ? (
-            <X className="h-3.5 w-3.5 text-zinc-100" />
-          ) : (
-            <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />
-          )}
+          {isCommentOpen ? <X className="h-3.5 w-3.5 text-zinc-100" /> : <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />}
         </button>
       )}
     </motion.div>
   );
 }
 
-
-// =====================
-// Droppable wrapper (click-to-place supported)
-// =====================
 function Droppable({ id, children, onClick }: { id: string; children: React.ReactNode; onClick?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -313,12 +286,12 @@ function Droppable({ id, children, onClick }: { id: string; children: React.Reac
 }
 
 // =====================
-// State helpers
+// State Helpers
 // =====================
-function makeEmptyGrid(rowsLen: number, colsLen: number) {
+function makeEmptyContainers(vTiers: number, hTiers: number) {
   const containers: Record<string, string[]> = {};
-  for (let r = 0; r < rowsLen; r++) {
-    for (let c = 0; c < colsLen; c++) {
+  for (let r = 0; r < vTiers; r++) {
+    for (let c = 0; c < hTiers; c++) {
       containers[`r${r}-c${c}`] = [];
     }
   }
@@ -327,44 +300,35 @@ function makeEmptyGrid(rowsLen: number, colsLen: number) {
 }
 
 function stateFromNames(names: string[]): AppState {
+  const talentAxis: AxisDefinition = {
+    id: "talent",
+    label: "Talent",
+    tiers: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
+  };
+  const styleAxis: AxisDefinition = {
+    id: "style",
+    label: "Style musical",
+    tiers: JSON.parse(JSON.stringify(DEFAULT_COLS)),
+    tierWidths: Array(DEFAULT_COLS.length).fill(220),
+  };
+
   const items: Record<string, Item> = {};
-  const containers = makeEmptyGrid(DEFAULT_ROWS.length, DEFAULT_COLS.length);
   const pool: string[] = [];
+
   names.forEach((n) => {
     const idBase = slug(n) || Math.random().toString(36).slice(2);
     const id = items[idBase] ? `${idBase}-${Math.random().toString(36).slice(2, 6)}` : idBase;
-    items[id] = { id, name: n };
+    items[id] = { id, name: n, axisPositions: { talent: null, style: null } };
     pool.push(id);
   });
-  containers[POOL_ID] = sortIdsAlpha(pool, items);
-  return {
-    rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
-    cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
-    colWidths: Array(DEFAULT_COLS.length).fill(220),
-    containers,
-    items,
-    poolId: POOL_ID,
-    tileSize: 96,
-    forceDark: true,
-  };
-}
 
-
-function stateFromEntries(entries: Array<{ name: string; image?: string; id?: string }>): AppState {
-  const items: Record<string, Item> = {};
-  const containers = makeEmptyGrid(DEFAULT_ROWS.length, DEFAULT_COLS.length);
-  const pool: string[] = [];
-  entries.forEach(({ name, image, id }) => {
-    const base = slug(id || name) || Math.random().toString(36).slice(2);
-    const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
-    items[uid] = { id: uid, name, image };
-    pool.push(uid);
-  });
+  const containers = makeEmptyContainers(DEFAULT_ROWS.length, DEFAULT_COLS.length);
   containers[POOL_ID] = sortIdsAlpha(pool, items);
+
   return {
-    rows: JSON.parse(JSON.stringify(DEFAULT_ROWS)),
-    cols: JSON.parse(JSON.stringify(DEFAULT_COLS)),
-    colWidths: Array(DEFAULT_COLS.length).fill(220),
+    axes: [talentAxis, styleAxis],
+    activeVerticalAxisId: "talent",
+    activeHorizontalAxisId: "style",
     containers,
     items,
     poolId: POOL_ID,
@@ -381,6 +345,7 @@ function encodeState(state: AppState) {
     return "";
   }
 }
+
 function decodeState(s: string): any | null {
   try {
     const json = LZString.decompressFromEncodedURIComponent(s);
@@ -392,58 +357,77 @@ function decodeState(s: string): any | null {
   }
 }
 
-function migrateState(obj: any): AppState | null {
+function migrateOldState(obj: any): AppState | null {
   if (!obj) return null;
-  const rows: Row[] = Array.isArray(obj.rows)
-    ? obj.rows.map((r: any, i: number) => (typeof r === "string" ? { label: r, color: DEFAULT_ROWS[i % DEFAULT_ROWS.length].color } : r))
+
+  if (obj.axes && Array.isArray(obj.axes)) {
+    return obj as AppState;
+  }
+
+  const rows = Array.isArray(obj.rows)
+    ? obj.rows.map((r: any, i: number) => typeof r === "string" ? { label: r, color: DEFAULT_ROWS[i % DEFAULT_ROWS.length].color } : r)
     : DEFAULT_ROWS;
-  const cols: Col[] = Array.isArray(obj.cols)
-    ? obj.cols.map((c: any, i: number) => (typeof c === "string" ? { label: c, color: DEFAULT_COLS[i % DEFAULT_COLS.length].color } : c))
+  const cols = Array.isArray(obj.cols)
+    ? obj.cols.map((c: any, i: number) => typeof c === "string" ? { label: c, color: DEFAULT_COLS[i % DEFAULT_COLS.length].color } : c)
     : DEFAULT_COLS;
 
-  const containers: Record<string, string[]> = obj.containers || makeEmptyGrid(rows.length, cols.length);
-  const items: Record<string, Item> = obj.items || {};
-  const poolId = obj.poolId || POOL_ID;
-  const tileSize = typeof obj.tileSize === "number" ? obj.tileSize : 96;
-  const forceDark = typeof obj.forceDark === "boolean" ? obj.forceDark : true;
-  const colWidths: number[] = Array.isArray(obj.colWidths) && obj.colWidths.length === cols.length
-    ? obj.colWidths.map((n: any) => (typeof n === "number" ? n : 220))
-    : Array(cols.length).fill(220);
+  const talentAxis: AxisDefinition = { id: "talent", label: "Talent", tiers: rows };
+  const styleAxis: AxisDefinition = {
+    id: "style",
+    label: "Style musical",
+    tiers: cols,
+    tierWidths: Array.isArray(obj.colWidths) && obj.colWidths.length === cols.length
+      ? obj.colWidths.map((n: any) => typeof n === "number" ? n : 220)
+      : Array(cols.length).fill(220),
+  };
 
-  for (let r = 0; r < rows.length; r++)
-    for (let c = 0; c < cols.length; c++) {
-      const id = `r${r}-c${c}`;
-      if (!containers[id]) containers[id] = [];
+  const oldItems: Record<string, any> = obj.items || {};
+  const items: Record<string, Item> = {};
+
+  for (const [id, oldItem] of Object.entries(oldItems)) {
+    const containerWithItem = Object.keys(obj.containers || {}).find(
+      k => (obj.containers[k] || []).includes(id)
+    );
+
+    let talentPos: number | null = null;
+    let stylePos: number | null = null;
+
+    if (containerWithItem && containerWithItem !== POOL_ID) {
+      const match = containerWithItem.match(/^r(\d+)-c(\d+)$/);
+      if (match) {
+        talentPos = parseInt(match[1]);
+        stylePos = parseInt(match[2]);
+      }
     }
-  if (!containers[poolId]) containers[poolId] = [];
 
-  return { rows, cols, colWidths, containers, items, poolId, tileSize, forceDark };
-}
+    items[id] = {
+      id,
+      name: oldItem.name || id,
+      image: oldItem.image,
+      comment: oldItem.comment,
+      axisPositions: { talent: talentPos, style: stylePos },
+    };
+  }
 
-// =====================
-// Self-tests (dev only, safe in browser)
-// =====================
-function assert(name: string, cond: boolean) {
-  if (cond) console.log(`âœ… ${name}`); else console.error(`âŒ ${name}`);
-}
-function runSelfTests() {
-  const s1 = splitImport("A,B;C\tD\nE\r\nF");
-  assert("splitImport handles , ; \t and newlines", s1.join("|") === "A|B|C|D|E|F");
+  const containers = makeEmptyContainers(rows.length, cols.length);
+  containers[POOL_ID] = obj.containers?.[POOL_ID] || [];
 
-  const pp = parsePairs("Alpha\thttp://x/a.jpg\tPériode 2016-2019\nBeta | https://x/b.webp\nGamma");
-  assert("parsePairs length", pp.length === 3);
-  assert("parsePairs images detected", !!pp[0].image && !!pp[1].image && !pp[2].image);
-  assert("parsePairs comment captured", pp[0].comment === "Période 2016-2019");
+  for (const [cid, arr] of Object.entries(obj.containers || {})) {
+    if (cid !== POOL_ID && cid.startsWith("r")) {
+      containers[cid] = arr as string[];
+    }
+  }
 
-
-  const st = stateFromEntries([{ name: "Alpha" }, { name: "Beta", image: "http://x/b.jpg" }]);
-  assert("stateFromEntries pool size", (st.containers[st.poolId] || []).length === 2);
-
-  const enc = encodeState(st); const dec = decodeState(enc);
-  assert("encode/decode works", !!dec && typeof dec === "object");
-
-  const mig = migrateState({ rows: ["R1"], cols: ["C1"], containers: { [POOL_ID]: [] }, items: {} });
-  assert("migrateState basic", !!mig && Array.isArray(mig.rows) && Array.isArray(mig.cols));
+  return {
+    axes: [talentAxis, styleAxis],
+    activeVerticalAxisId: "talent",
+    activeHorizontalAxisId: "style",
+    containers,
+    items,
+    poolId: POOL_ID,
+    tileSize: typeof obj.tileSize === "number" ? obj.tileSize : 96,
+    forceDark: true,
+  };
 }
 
 // =====================
@@ -454,14 +438,14 @@ export default function TierList2D() {
     const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
     if (hash) {
       const dec = decodeState(hash);
-      const mig = migrateState(dec);
+      const mig = migrateOldState(dec);
       if (mig) return mig;
     }
     if (typeof window !== "undefined") {
       const raw = localStorage.getItem("tierlist2d-state");
       if (raw) {
         try {
-          const mig = migrateState(JSON.parse(raw));
+          const mig = migrateOldState(JSON.parse(raw));
           if (mig) return mig;
         } catch {}
       }
@@ -472,9 +456,7 @@ export default function TierList2D() {
   const [state, setState] = useState<AppState>(initialState);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pairsText, setPairsText] = useState("");
-  const [autoSyncURL, setAutoSyncURL] = useState(false);
   const [poolQuery, setPoolQuery] = useState("");
-  const [clickMode] = useState(true); // always click mode
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [seedInput, setSeedInput] = useState("");
@@ -482,40 +464,25 @@ export default function TierList2D() {
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [lastSeedId, setLastSeedId] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(true);
-  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
-  const [commentPos, setCommentPos] = useState<{top:number; left:number; width:number} | null>(null);
   const [showAxes, setShowAxes] = useState(true);
+  const [showAxisManager, setShowAxisManager] = useState(false);
+  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [draftComment, setDraftComment] = useState("");
+  const [poolAlpha, setPoolAlpha] = useState<AlphaKey | null>("AB");
+  const [editingAxisId, setEditingAxisId] = useState<string | null>(null);
+
   const commentRef = useRef<HTMLDivElement | null>(null);
-  // racine (pour clic global)
-const appRootRef = useRef<HTMLDivElement | null>(null);
+  const appRootRef = useRef<HTMLDivElement | null>(null);
 
-// désélection au clic “inutile”
-useEffect(() => {
-  function handleGlobalClick(ev: MouseEvent) {
-    const t = ev.target as HTMLElement | null;
-    if (!t) return;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
+    useSensor(MouseSensor),
+    useSensor(TouchSensor),
+  );
 
-    // zones “utiles” -> ne pas désélectionner
-    const clickedUseful =
-      t.closest("[data-item-id]") ||          // tuile
-      t.closest("[data-cell-id]") ||          // cellule de la grille
-      t.closest("[data-pool-root]") ||        // bac
-      t.closest("[data-comment-panel]") ||    // panneau commentaire
-      t.closest("button,[role='button'],input,textarea,select,a,[contenteditable='true']");
-
-    if (clickedUseful) return;
-
-    // sinon : on ferme & on désélectionne
-    setOpenCommentId(null);
-    setIsEditingComment(false);
-    setSelectedId(null);
-  }
-  document.addEventListener("click", handleGlobalClick, true);
-  return () => document.removeEventListener("click", handleGlobalClick, true);
-}, []);
-
+  const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId) || state.axes[0];
+  const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId) || state.axes[1] || state.axes[0];
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -527,528 +494,49 @@ useEffect(() => {
     return s;
   }, [state.items, search]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
-    useSensor(MouseSensor),
-    useSensor(TouchSensor),
-  );
-
-  // Load last used seed id (for convenience)
-  useEffect(() => {
-    try { const sid = localStorage.getItem("tier2d-last-seed-id"); if (sid) setLastSeedId(sid); } catch {}
-  }, []);
-
-// --- Navigation alphabétique du Bac ---
-// null = toutes les tranches
-const [poolAlpha, setPoolAlpha] = useState<string | null>("AB");
-
-// Paires de tranches
-const ALPHA_BUCKETS = ["09","AB","CD","EF","GH","IJ","KL","MN","OP","QR","ST","UV","WX","YZ","Autres"] as const;
-type AlphaKey = typeof ALPHA_BUCKETS[number];
-
-// Détermine la tranche d'un nom
-function bucketForName(name: string): AlphaKey {
-  const normalized = (name || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .trim().toUpperCase();
-  
-  const first = normalized.charAt(0);
-
-  if (first >= "0" && first <= "9") return "09";
-
-  const code = first.charCodeAt(0);
-  if (code >= 65 && code <= 90) { // A-Z
-    const pairs: [AlphaKey, number, number][] = [
-      ["AB",65,66],["CD",67,68],["EF",69,70],["GH",71,72],
-      ["IJ",73,74],["KL",75,76],["MN",77,78],["OP",79,80],
-      ["QR",81,82],["ST",83,84],["UV",85,86],["WX",87,88],
-      ["YZ",89,90],
-    ];
-    for (const [key, a, b] of pairs) if (code === a || code === b) return key;
-  }
-
-  // Tout ce qui n'est ni 0-9 ni A-Z → "Autres"
-  return "Autres";
-}
-
-// Look d'une puce de tranche
-function chipCls(active: boolean) {
-  return [
-    "px-2 py-1 rounded-md text-xs border",
-    active
-      ? "bg-zinc-200 text-zinc-900 border-zinc-300"
-      : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
-  ].join(" ");
-}
-
-  
-  // Persist
   useEffect(() => {
     try {
       localStorage.setItem("tierlist2d-state", JSON.stringify(state));
-      if (autoSyncURL) {
-        const enc = encodeState(state);
-        if (enc) history.replaceState(null, "", `#${enc}`);
-      }
     } catch {}
-  }, [state, autoSyncURL]);
+  }, [state]);
 
-  // (1) Quand on ouvre un commentaire, préparer le brouillon et sortir du mode édition
-useEffect(() => {
-  if (!openCommentId) return;
-  setIsEditingComment(false);
-  setDraftComment(state.items[openCommentId]?.comment ?? "");
-}, [openCommentId, state.items]);
-
-// (2) Fermer le panneau si on clique en dehors
-useEffect(() => {
-  if (!openCommentId) return;
-
-  const onDown = (e: MouseEvent) => {
-    if (commentRef.current && !commentRef.current.contains(e.target as Node)) {
+  useEffect(() => {
+    function handleGlobalClick(ev: MouseEvent) {
+      const t = ev.target as HTMLElement | null;
+      if (!t) return;
+      const clickedUseful = t.closest("[data-item-id]") || t.closest("[data-cell-id]") ||
+        t.closest("[data-pool-root]") || t.closest("[data-comment-panel]") ||
+        t.closest("button,[role='button'],input,textarea,select,a,[contenteditable='true']");
+      if (clickedUseful) return;
       setOpenCommentId(null);
-      setCommentPos(null);
       setIsEditingComment(false);
+      setSelectedId(null);
     }
-  };
+    document.addEventListener("click", handleGlobalClick, true);
+    return () => document.removeEventListener("click", handleGlobalClick, true);
+  }, []);
 
-  // capture=true pour passer avant d'éventuels stopPropagation
-  document.addEventListener("mousedown", onDown, true);
-  return () => document.removeEventListener("mousedown", onDown, true);
-}, [openCommentId]);
+  useEffect(() => {
+    if (!openCommentId) return;
+    setIsEditingComment(false);
+    setDraftComment(state.items[openCommentId]?.comment ?? "");
+  }, [openCommentId, state.items]);
 
-// (3) Recalculer la position du panneau au resize/scroll (si tu ne l'as pas déjà )
-useEffect(() => {
-  if (!openCommentId) return;
+  useEffect(() => {
+    try {
+      const sid = localStorage.getItem("tier2d-last-seed-id");
+      if (sid) setLastSeedId(sid);
+    } catch {}
+  }, []);
 
-  const recalc = () => {
-    const el = document.querySelector(
-      `[data-item-id="${openCommentId}"]`
-    ) as HTMLElement | null;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const gap = 8;
-    const width = Math.max(rect.width * 2 + 16, 280);
-
-    // coordonnées viewport (panneau en position: fixed)
-    const left = Math.min(
-      rect.right + gap,
-      document.documentElement.clientWidth - width - 12
-    );
-    const top = Math.min(
-      rect.top - 4,
-      document.documentElement.clientHeight - 100
-    );
-
-    setCommentPos({ top, left, width });
-  };
-
-  recalc();
-  window.addEventListener("resize", recalc);
-  window.addEventListener("scroll", recalc, { passive: true });
-  return () => {
-    window.removeEventListener("resize", recalc);
-    window.removeEventListener("scroll", recalc);
-  };
-}, [openCommentId]);
-
-
-  // If URL has ?seed=XYZ on first load, fetch it
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
       const url = new URL(window.location.href);
       const seed = url.searchParams.get('seed');
-      if (seed) { loadSeed(seed); }
+      if (seed) loadSeed(seed);
     } catch {}
   }, []);
-
-  // Dev self-tests (safe env checks)
-  useEffect(() => {
-    try {
-      const g: any = typeof globalThis !== "undefined" ? (globalThis as any) : {};
-      const isDev = !!g.process?.env?.NODE_ENV ? g.process.env.NODE_ENV !== "production" : false;
-      if (isDev && typeof window !== "undefined") {
-        const w: any = window as any;
-        if (!w.__tier2d_tests_ran__) {
-          w.__tier2d_tests_ran__ = true;
-          runSelfTests();
-        }
-      }
-    } catch {}
-  }, []);
-
-  // Ensure containers exist after rows/cols edits & keep colWidths in sync
-  useEffect(() => {
-    setState((prev) => {
-      const containers = { ...prev.containers };
-      for (let r = 0; r < prev.rows.length; r++)
-        for (let c = 0; c < prev.cols.length; c++)
-          if (!containers[`r${r}-c${c}`]) containers[`r${r}-c${c}`] = [];
-
-      const valid = new Set<string>([prev.poolId]);
-      for (let r = 0; r < prev.rows.length; r++)
-        for (let c = 0; c < prev.cols.length; c++) valid.add(`r${r}-c${c}`);
-
-      const pool = [...(containers[prev.poolId] || [])];
-      Object.keys(containers).forEach((k) => {
-        if (!valid.has(k)) {
-          pool.push(...containers[k]);
-          delete containers[k];
-        }
-      });
-      containers[prev.poolId] = pool;
-
-      // sync colWidths length
-      const colWidths = prev.colWidths.length === prev.cols.length
-        ? prev.colWidths
-        : Array(prev.cols.length).fill(prev.colWidths[0] ?? 220);
-
-      return { ...prev, containers, colWidths };
-    });
-  }, [state.rows.length, state.cols.length]);
-
-  useEffect(() => {
-  if (!openCommentId) return;
-
-  const recalc = () => {
-    const el = document.querySelector(`[data-item-id="${openCommentId}"]`) as HTMLElement | null;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const gap = 8;
-    const width = Math.max(rect.width * 2 + 16, 280);
-
-    // coordonnées viewport (position: fixed)
-    const leftCandidate = rect.right + gap;
-    const maxLeft = document.documentElement.clientWidth - width - 12;
-    const left = Math.min(leftCandidate, maxLeft);
-
-    const topCandidate = rect.top - 4;
-    const maxTop = document.documentElement.clientHeight - 100;
-    const top = Math.min(topCandidate, maxTop);
-
-    setCommentPos({ top, left, width });
-  };
-
-  recalc();
-  window.addEventListener("resize", recalc);
-  window.addEventListener("scroll", recalc, { passive: true });
-  return () => {
-    window.removeEventListener("resize", recalc);
-    window.removeEventListener("scroll", recalc);
-  };
-}, [openCommentId]);
-
-
-  const getContainerByItem = (itemId: string) => {
-    for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
-    return null;
-  };
-
-  function moveToContainer(itemId: string, containerId: string) {
-    setState((prev) => {
-      const next = { ...prev, containers: { ...prev.containers } } as AppState;
-      const from = getContainerByItem(itemId);
-      if (!from) return prev;
-      if (!next.containers[containerId]) next.containers[containerId] = [];
-      const src = [...next.containers[from]];
-      const idx = src.indexOf(itemId);
-      if (idx > -1) src.splice(idx, 1);
-      next.containers[from] = src;
-      next.containers[containerId] = (containerId === next.poolId)
-        ? sortIdsAlpha([...(next.containers[containerId] || []), itemId], next.items)
-        : [...(next.containers[containerId] || []), itemId];
-      return next;
-    });
-  }
-
-function toggleCommentFor(id: string) {
-  if (openCommentId === id) {
-    setOpenCommentId(null);
-    setCommentPos(null);
-    setIsEditingComment(false);
-    return;
-  }
-  const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
-  if (!el) return;
-
-  const rect = el.getBoundingClientRect();
-  const gap = 8;
-  const width = Math.max(rect.width * 2 + 16, 280);
-
-  const leftCandidate = rect.right + window.scrollX + gap;
-  const maxLeft = window.scrollX + document.documentElement.clientWidth - width - 12;
-  const left = Math.min(leftCandidate, maxLeft);
-
-  const topCandidate = rect.top + window.scrollY - 4;
-  const maxTop = window.scrollY + document.documentElement.clientHeight - 100;
-  const top = Math.min(topCandidate, maxTop);
-
-  setCommentPos({ top, left, width });
-  setOpenCommentId(id);
-  setSelectedId(null); // désélectionner
-  
-  // Passer en mode édition si commentaire vide
-  const hasComment = state.items[id]?.comment?.trim();
-  if (!hasComment) {
-    setIsEditingComment(true);
-    setDraftComment("");
-  }
-}
-
-
-
-  // DnD handlers (kept but optional)
-  function deleteCommentById(id: string) {
-  setState(prev => {
-    const items = { ...prev.items };
-    if (items[id]) {
-      items[id] = { ...items[id] };
-      delete items[id].comment;
-    }
-    return { ...prev, items } as AppState;
-  });
-  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
-}
-  function handleDragStart(event: any) { setActiveId(event.active?.id ?? null); }
-  function handleDragOver(event: any) {
-  const { active, over } = event; if (!over) return;
-  const activeId = active.id as string;
-  const overId = over.id as string; if (overId === undefined) return;
-
-  const sourceContainer = getContainerByItem(activeId);
-  const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
-  if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
-
-  setState((prev) => {
-    const next = { ...prev, containers: { ...prev.containers } } as AppState;
-    const sourceItems = [...(next.containers[sourceContainer] || [])];
-    const destItems   = [...(next.containers[destContainer]   || [])];
-
-    const idx = sourceItems.indexOf(activeId);
-    if (idx > -1) sourceItems.splice(idx, 1);
-    destItems.push(activeId);
-
-    next.containers[sourceContainer] = sourceItems;
-    next.containers[destContainer]   = (destContainer === next.poolId)
-      ? sortIdsAlpha(destItems, next.items)
-      : destItems;
-
-    return next;
-  });
-}
-  function handleDragEnd(event: any) {
-    const { active, over } = event; setActiveId(null); if (!over) return;
-    const activeId = active.id as string; const overId = over.id as string;
-    const sourceContainer = getContainerByItem(activeId); const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
-    if (!sourceContainer || !destContainer) return;
-    if (sourceContainer === destContainer) {
-      setState((prev) => {
-        if (sourceContainer === prev.poolId) {
-          const sorted = sortIdsAlpha([...(prev.containers[sourceContainer] || [])], prev.items);
-          return { ...prev, containers: { ...prev.containers, [sourceContainer]: sorted } } as AppState;
-        }
-        const items = [...(prev.containers[sourceContainer] || [])];
-        const oldIndex = items.indexOf(activeId);
-        let newIndex = items.indexOf(overId);
-        if (newIndex === -1) newIndex = oldIndex;
-        return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) } } as AppState;
-      });
-    }
-  }
-
-
-  // UI actions for rows/cols
-  function addRow() { setState((s) => ({ ...s, rows: [...s.rows, { label: `Ligne ${s.rows.length + 1}`, color: "#94a3b8" }] })); }
-  function addCol() { setState((s) => ({ ...s, cols: [...s.cols, { label: `Colonne ${s.cols.length + 1}`, color: "#94a3b8" }], colWidths: [...s.colWidths, s.colWidths.at(-1) ?? 220] })); }
-  function removeRow(i: number) { setState((s) => ({ ...s, rows: s.rows.filter((_, idx) => idx !== i) })); }
-  function removeCol(i: number) { setState((s) => ({ ...s, cols: s.cols.filter((_, idx) => idx !== i), colWidths: s.colWidths.filter((_, idx) => idx !== i) })); }
-  function renameRow(i: number, v: string) {
-  setState((s) => {
-    const rows = [...s.rows];
-    rows[i] = { ...rows[i], label: v };
-    return { ...s, rows };
-  });
-}
-function recolorRow(i: number, v: string) {
-  setState((s) => {
-    const rows = [...s.rows];
-    rows[i] = { ...rows[i], color: v };
-    return { ...s, rows };
-  });
-}
-function renameCol(i: number, v: string) {
-  setState((s) => {
-    const cols = [...s.cols];
-    cols[i] = { ...cols[i], label: v };
-    return { ...s, cols };
-  });
-}
-function recolorCol(i: number, v: string) {
-  setState((s) => {
-    const cols = [...s.cols];
-    cols[i] = { ...cols[i], color: v };
-    return { ...s, cols };
-  });
-}
-function setColWidth(i: number, v: number) {
-  setState((s) => {
-    const cw = [...s.colWidths];
-    const w = Math.max(140, Math.min(560, Math.round(v)));
-    cw[i] = w;
-    return { ...s, colWidths: cw };
-  });
-}
-function applyColWidthAll(v: number) {
-  setState((s) => ({
-    ...s,
-    colWidths: Array(s.cols.length).fill(Math.max(140, Math.min(560, Math.round(v)))),
-  }));
-}
-function clearGridKeepItems() {
-  setState((s) => {
-    const containers = makeEmptyGrid(s.rows.length, s.cols.length);
-    const allIds = Object.values(s.containers).flat();
-    containers[POOL_ID] = sortIdsAlpha(allIds, s.items);
-    return { ...s, containers };
-  });
-}
-
-  function resetAll() { setState(stateFromNames([])); history.replaceState(null, "", "#"); }
-  function exportState() { try { const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "tierlist2d_state.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); } catch { alert("Export impossible dans cet environnement."); } }
-  function importStateFromFile(file: File) {
-    const reader = new FileReader(); reader.onload = () => { try {
-      const obj = JSON.parse(String(reader.result));
-      if (Array.isArray(obj)) {
-        if (obj.length && typeof obj[0] === "object" && obj[0].name) { setState(stateFromEntries(obj)); }
-        else { setState(stateFromNames(obj.map(String))); }
-        return;
-      }
-      const mig = migrateState(obj); if (mig) setState(mig);
-    } catch { alert("Fichier invalide"); } }; reader.readAsText(file);
-  }
-  function shareURL(copyOnly = true) {
-    const enc = encodeState(state); if (!enc) return;
-    const url = `${location.origin}${location.pathname}#${enc}`;
-    navigator.clipboard?.writeText(url);
-    if (!copyOnly) history.replaceState(null, "", `#${enc}`);
-    alert("Lien copié dans le presse-papiers âœ¨");
-  }
-
-  // --- Seed publishing (to Vercel Blob via API) ---
-  async function publishSeed(explicitId?: string) {
-    try {
-      setPublishing(true);
-      const encoded = encodeState(state);
-      const payload: any = { data: encoded };
-      if (explicitId && explicitId.trim()) payload.id = explicitId.trim();
-      const res = await fetch('/api/seed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json();
-      const id: string = j.id;
-      setLastSeedId(id);
-      try { localStorage.setItem('tier2d-last-seed-id', id); } catch {}
-      const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
-      await navigator.clipboard?.writeText(share);
-      alert(`Seed publié !
-ID: ${id}
-Lien copié : ${share}`);
-    } catch (e: any) {
-      alert(`Échec publication du seed. ${e?.message || ''}
-As-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
-    } finally { setPublishing(false); }
-  }
-
-  async function loadSeed(input: string) {
-    try {
-      setLoadingSeed(true);
-      let url = input.trim();
-      // autoriser collage direct de l'URL blob
-      if (!/^https?:\/\//i.test(url)) url = `/api/seed/${encodeURIComponent(url)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json();
-      const dec = decodeState(j.data);
-      const mig = migrateState(dec);
-      if (mig) {
-        setState(mig);
-        if (j.id) { setLastSeedId(j.id); try { localStorage.setItem('tier2d-last-seed-id', j.id); } catch {} }
-        alert('Seed chargée');
-      } else {
-        alert('Seed invalide.');
-      }
-    } catch (e: any) {
-      alert(`Échec chargement du seed. ${e?.message || ''}`);
-    } finally { setLoadingSeed(false); }
-  }
-function importPairs() {
-  const entries = parsePairs(pairsText);
-  if (!entries.length) return;
-
-  const items = { ...state.items };
-  const pool = [...(state.containers[state.poolId] || [])];
-
-  for (const { name, image, comment } of entries) {
-    const base = slug(name) || Math.random().toString(36).slice(2);
-    const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
-
-    items[uid] = {
-      id: uid,
-      name,
-      image: image,
-      comment,
-    };
-
-    pool.push(uid);
-  }
-
-  setPairsText("");
-  setState((s) => ({
-    ...s,
-    items,
-    containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) },
-  }));
-}
-
-
-  const T = DARK; // always dark
-
-  function deleteItem(id: string) {
-  setState((prev) => {
-    const containers = { ...prev.containers };
-    for (const [cid, arr] of Object.entries(containers)) {
-      const idx = arr.indexOf(id);
-      if (idx > -1) {
-        const clone = [...arr];
-        clone.splice(idx, 1);
-        containers[cid] = clone;
-      }
-    }
-    const items = { ...prev.items };
-    delete items[id];
-    return { ...prev, containers, items } as AppState;
-  });
-  if (selectedId === id) setSelectedId(null);
-  if (openCommentId === id) { setOpenCommentId(null); setCommentPos(null); }
-}
-
-function clearPool() {
-  setState((prev) => {
-    const pool = prev.containers[prev.poolId] || [];
-    const items = { ...prev.items };
-    for (const id of pool) delete items[id];
-    return { ...prev, items, containers: { ...prev.containers, [prev.poolId]: [] } } as AppState;
-  });
-}
-
-  function scrollToFirstMatch() {
-    const id = Array.from(matchedIds)[0];
-    if (!id) return;
-    const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1065,626 +553,995 @@ function clearPool() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId]);
 
-  // Grid template: header + dynamic cols (px)
-// === valeurs dérivées pour la grille & le bac ===
-// === derived values used by the render (INSIDE the component) ===
-const colsPx = (state.colWidths?.length ? state.colWidths : Array(state.cols.length).fill(220))
-  .map((w) => `${w}px`)
-  .join(" ");
+  const getContainerByItem = (itemId: string) => {
+    for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
+    return null;
+  };
 
-const gridTemplate: React.CSSProperties = {
-  gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
-};
+  function moveToContainer(itemId: string, containerId: string) {
+    setState((prev) => {
+      const next = { ...prev, containers: { ...prev.containers } };
+      const from = getContainerByItem(itemId);
+      if (!from) return prev;
+      if (!next.containers[containerId]) next.containers[containerId] = [];
+      const src = [...next.containers[from]];
+      const idx = src.indexOf(itemId);
+      if (idx > -1) src.splice(idx, 1);
+      next.containers[from] = src;
+      next.containers[containerId] = containerId === next.poolId
+        ? sortIdsAlpha([...next.containers[containerId], itemId], next.items)
+        : [...next.containers[containerId], itemId];
 
-const poolIds = state.containers[state.poolId] || [];
-const filteredPoolIds = poolQuery
-  ? poolIds.filter((id) =>
-      normalizeText(state.items[id]?.name || id).includes(normalizeText(poolQuery))
-    )
-  : poolIds;
+      const items = { ...next.items };
+      if (items[itemId]) {
+        const axisPositions = { ...items[itemId].axisPositions };
+        if (containerId !== next.poolId) {
+          const match = containerId.match(/^r(\d+)-c(\d+)$/);
+          if (match) {
+            axisPositions[next.activeVerticalAxisId] = parseInt(match[1]);
+            axisPositions[next.activeHorizontalAxisId] = parseInt(match[2]);
+          }
+        }
+        items[itemId] = { ...items[itemId], axisPositions };
+      }
+      return { ...next, items };
+    });
+  }
 
-  // n'afficher la barre alphabétique que si beaucoup d'items
-const showAlphaNav = filteredPoolIds.length > 1000;
-
-// filtre alphabétique (en plus du champ de recherche)
-const alphaFilteredPoolIds = poolAlpha
-  ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
-  : filteredPoolIds;
-
-
-// ---- render ----
-// IMPORTANT: keep the leading semicolon to avoid ASI issues if the previous line ends with a parenthesis
-return (
-  <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-      {/* ====== Barre de titres + actions ====== */}
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
-        <div className="flex flex-wrap items-center gap-2">
-  <Button
-    variant="secondary"
-    onClick={() => {
-      const containers = Object.fromEntries(Object.keys(state.containers).map(k => [k, []]));
-      (containers as any)[state.poolId] = sortIdsAlpha(Object.values(state.containers).flat(), state.items);
-      setState(s => ({ ...s, containers: containers as any }));
-    }}
-    title="Tout renvoyer en bas"
-  >
-    <Scissors className="w-4 h-4 mr-2" /> Vider la grille
-  </Button>
-
-  <Button variant="outline" className={OUTLINE_DARK} onClick={exportState} title="Exporter l'état en JSON">
-    <Download className="w-4 h-4 mr-2" /> Exporter
-  </Button>
-
-  <label className="inline-flex items-center gap-2 cursor-pointer">
-    <Upload className="w-4 h-4" />
-    <span className="text-sm">Importer .json</span>
-    <input
-      type="file"
-      accept="application/json"
-      className="hidden"
-      onChange={(e) => {
-        const f = (e.target as HTMLInputElement).files?.[0];
-        if (f) importStateFromFile(f);
-        (e.currentTarget as HTMLInputElement).value = "";
-      }}
-    />
-  </label>
-
-  <Button onClick={() => shareURL(false)} title="Mettre l'état dans l'URL et copier le lien">
-    <Link2 className="w-4 h-4 mr-2" /> Partager le lien
-  </Button>
-
-  <Button variant="destructive" onClick={resetAll} title="Réinitialiser complètement">
-    <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
-  </Button>
-
-[
-          
-        </div>
-      </div>
-
-      {/* ====== Mode d'emploi / Seed ====== */}
-   {/* ====== Mode d'emploi / Sauvegarde & partage ====== */}
-<Card>
-  <CardHeader className="flex items-center justify-between gap-2">
-    <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
-    <Button
-      variant="outline"
-      className={OUTLINE_DARK}
-      size="sm"
-      onClick={() => setShowHelp(v => !v)}
-    >
-      {showHelp ? "Masquer" : "Afficher"}
-    </Button>
-  </CardHeader>
-
-  {showHelp && (
-    <CardContent className="space-y-4">
-      <ul className={cx("text-sm list-disc pl-5", T.mutedText)}>
-        {INSTRUCTIONS.map((t, i) => <li key={i}>{t}</li>)}
-      </ul>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          className={INPUT_DARK + " w-56"}
-          placeholder="ID de la seed ou URL"
-          value={seedInput}
-          onChange={(e) => setSeedInput(e.target.value)}
-        />
-        <Button variant="outline" className={OUTLINE_DARK} disabled={loadingSeed} onClick={() => loadSeed(seedInput)}>
-          {loadingSeed ? "Chargement…" : "Charger seed"}
-        </Button>
-        <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
-          {publishing ? "Publication…" : "Publier (nouvelle seed)"}
-        </Button>
-        <Button
-          variant="outline"
-          className={OUTLINE_DARK}
-          disabled={publishing || !lastSeedId}
-          onClick={() => lastSeedId && publishSeed(lastSeedId)}
-          title={lastSeedId ? `Mettre à  jour le seed ${lastSeedId}` : "Aucune seed chargée"}
-        >
-          {publishing ? "Mise à  jour…" : "Mettre à  jour la seed"}
-        </Button>
-        {lastSeedId && (
-          <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>
-        )}
-      </div>
-    </CardContent>
-  )}
-</Card>
-
-
-     {/* ====== Axes & options (rétractable) ====== */}
-<Card>
-  <CardHeader className="flex items-center justify-between gap-2">
-    <CardTitle>Axes & options</CardTitle>
-    <Button
-      variant="outline"
-      className={OUTLINE_DARK}
-      size="sm"
-      onClick={() => setShowAxes(v => !v)}
-    >
-      {showAxes ? "Masquer" : "Afficher"}
-    </Button>
-  </CardHeader>
-
-  {showAxes && (
-    <CardContent className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <Label className="mb-2 block">Axe vertical (lignes) — texte & couleur</Label>
-          <div className="space-y-2">
-            {state.rows.map((r, i) => (
-              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-                <Input className={INPUT_DARK} value={r.label} onChange={(e) => renameRow(i, e.target.value)} />
-                <input
-                  type="color"
-                  value={r.color}
-                  onChange={(e) => recolorRow(i, e.target.value)}
-                  title="Couleur de la ligne"
-                  className="h-10 w-12 rounded cursor-pointer border"
-                />
-                <div
-                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
-                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
-                  title="Aperçu"
-                >
-                  Aperçu
-                </div>
-                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeRow(i)} title="Supprimer la ligne">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
-            <Button onClick={addRow} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une ligne</Button>
-          </div>
-        </div>
-
-        <div>
-          <Label className="mb-2 block">Axe horizontal (colonnes) — texte & couleur</Label>
-          <div className="space-y-2">
-            {state.cols.map((c, i) => (
-              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-                <Input className={INPUT_DARK} value={c.label} onChange={(e) => renameCol(i, e.target.value)} />
-                <input
-                  type="color"
-                  value={c.color}
-                  onChange={(e) => recolorCol(i, e.target.value)}
-                  title="Couleur de la colonne"
-                  className="h-10 w-12 rounded cursor-pointer border"
-                />
-                <div
-                  className="px-3 py-2 rounded-md text-xs font-semibold text-center"
-                  style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
-                  title="Aperçu"
-                >
-                  Aperçu
-                </div>
-                <Button variant="outline" className={OUTLINE_DARK} size="icon" onClick={() => removeCol(i)} title="Supprimer la colonne">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
-            <Button onClick={addCol} className="mt-1"><Plus className="w-4 h-4 mr-2" /> Ajouter une colonne</Button>
-          </div>
-        </div>
-      </div>
-    </CardContent>
-  )}
-</Card>
-
-{/* Nouvelle section : Actions sur les tuiles */}
-<Card>
-  <CardHeader>
-    <CardTitle>Actions sur les tuiles</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="flex flex-wrap items-center gap-2">
-      <Input
-        className={INPUT_DARK + " w-44"}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Rechercher…"
-      />
-      <Button
-        variant="outline"
-        className={OUTLINE_DARK}
-        onClick={() => {
-          const id = Array.from(matchedIds)[0];
-          if (!id) return;
-          const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
-          el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-        }}
-      >
-        Trouver
-      </Button>
-      {search && (
-        <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
-          Effacer
-        </Button>
-      )}
-
-      <div className="w-px h-6 bg-zinc-700 mx-1" />
-
-      <Button
-        variant="outline"
-        className={OUTLINE_DARK}
-        disabled={!selectedId}
-        onClick={() => selectedId && toggleCommentFor(selectedId)}
-      >
-        Ajouter / ouvrir un commentaire
-      </Button>
-      <Button
-        variant="outline"
-        className={OUTLINE_DARK}
-        disabled={!selectedId || !state.items[selectedId!]?.comment}
-        onClick={() => {
-          if (!selectedId) return;
-          setState(prev => {
-            const items = { ...prev.items };
-            if (items[selectedId]) {
-              items[selectedId] = { ...items[selectedId] };
-              delete items[selectedId].comment;
-            }
-            return { ...prev, items } as AppState;
-          });
-          if (openCommentId === selectedId) { setOpenCommentId(null); setCommentPos(null); }
-        }}
-      >
-        Supprimer le commentaire
-      </Button>
-      <Button
-        variant="outline"
-        className={OUTLINE_DARK}
-        disabled={!selectedId}
-        onClick={() => selectedId && deleteItem(selectedId)}
-      >
-        Supprimer la tuile
-      </Button>
-    </div>
-  </CardContent>
-</Card>
-
-{/* ====== Grille + Bac + Panneau commentaire ====== */}
-      
-      {/* ====== Grille + Bac + Panneau commentaire ====== */}
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
-        {/* Grille */}
-        <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
-          <div className="grid gap-2 p-2" style={gridTemplate}>
-            <div />
-            {state.cols.map((c, ci) => (
-              <div
-                key={`colh-${ci}`}
-                className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
-                style={{ backgroundColor: c.color, color: textColorForBg(c.color) }}
-              >
-                {c.label}
-              </div>
-            ))}
-
-            {state.rows.map((r, ri) => (
-              <React.Fragment key={`row-${ri}`}>
-                <div
-                  className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
-                  style={{ backgroundColor: r.color, color: textColorForBg(r.color) }}
-                >
-                  {r.label}
-                </div>
-
-                {state.cols.map((_, ci) => {
-                  const id = `r${ri}-c${ci}`;
-                  const items = state.containers[id] || [];
-                  return (
-                    <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
-                      <CardContent className={cx("p-2", T.cardBg)}>
-  <SortableContext items={items} strategy={rectSortingStrategy}>
-   <Droppable
-  id={id}
-  onClick={() => {
-    if (!selectedId) return;
-    const currentContainer = getContainerByItem(selectedId);
-    if (currentContainer === id) {
-      // Clic dans la même cellule → désélectionner
-      setSelectedId(null);
+  function toggleCommentFor(id: string) {
+    if (openCommentId === id) {
+      setOpenCommentId(null);
+      setIsEditingComment(false);
       return;
     }
-    // Sinon déplacer
-    moveToContainer(selectedId, id);
-  }}
->
-      <div
-        className="relative w-full flex flex-wrap gap-2"
-        style={{ minHeight: 120 }}
-        data-cell-id={id}
-      >
-        {items.map((itemId) => (
-          <Tile
-            key={itemId}
-            id={itemId}
-            name={state.items[itemId]?.name ?? itemId}
-            image={state.items[itemId]?.image}
-            comment={state.items[itemId]?.comment}
-            tileSize={state.tileSize}
-            selected={selectedId === itemId}
-            highlighted={matchedIds.has(itemId)}
-            onClick={() => setSelectedId(itemId)}
-            isCommentOpen={openCommentId === itemId}
-            onCommentToggle={toggleCommentFor}
-          />
-        ))}
-      </div>
-    </Droppable>
-  </SortableContext>
-</CardContent>
-                    </Card>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-
-      {/* Bac */}
-<Card>
-  <CardHeader className="flex items-center justify-between">
-    <CardTitle>Bac (non classés)</CardTitle>
-    {showAlphaNav && (
-      <div className="flex items-center gap-1 flex-wrap">
-        <button
-          className={chipCls(poolAlpha === null)}
-          onClick={() => setPoolAlpha(null)}
-          title="Toutes les tranches"
-        >
-          Tous
-        </button>
-{ALPHA_BUCKETS.map((k) => (
-  <button
-    key={k}
-    className={chipCls(poolAlpha === k)}
-    onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
-    title={k === "Autres" ? "Filtrer: symboles & autres" : `Filtrer: ${k[0]}–${k[1]}`}
-  >
-    {k === "Autres" ? "Autres" : `${k[0]}–${k[1]}`}
-  </button>
-))}
-      </div>
-    )}
-  </CardHeader>
-
-  <CardContent className={T.cardBg}>
-    <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
-      <Droppable id={state.poolId}>
-<div
-  data-pool-root="1"
-  className="flex flex-wrap gap-2 p-2"
-  style={{ contain: "layout paint" }}
-  onClick={(e) => {
-    if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
-    if (!selectedId) return;
-    const currentContainer = getContainerByItem(selectedId);
-    if (currentContainer === state.poolId) {
-      // Déjà dans le bac → désélectionner
-      setSelectedId(null);
-      return;
+    setOpenCommentId(id);
+    setSelectedId(null);
+    const hasComment = state.items[id]?.comment?.trim();
+    if (!hasComment) {
+      setIsEditingComment(true);
+      setDraftComment("");
     }
-    moveToContainer(selectedId, state.poolId);
-  }}
->
-          {alphaFilteredPoolIds.map((itemId) => (
-            <Tile
-              key={itemId}
-              id={itemId}
-              name={state.items[itemId]?.name ?? itemId}
-              image={state.items[itemId]?.image}
-              comment={state.items[itemId]?.comment}
-              tileSize={state.tileSize}
-              selected={selectedId === itemId}
-              highlighted={matchedIds.has(itemId)}
-              onClick={() => setSelectedId(itemId)}
-              isCommentOpen={openCommentId === itemId}
-              onCommentToggle={toggleCommentFor}
-            />
-          ))}
-        </div>
-      </Droppable>
-    </SortableContext>
-  </CardContent>
-</Card>
+  }
 
+  function deleteItem(id: string) {
+    setState((prev) => {
+      const containers = { ...prev.containers };
+      for (const [cid, arr] of Object.entries(containers)) {
+        const idx = arr.indexOf(id);
+        if (idx > -1) {
+          const clone = [...arr];
+          clone.splice(idx, 1);
+          containers[cid] = clone;
+        }
+      }
+      const items = { ...prev.items };
+      delete items[id];
+      return { ...prev, containers, items };
+    });
+    if (selectedId === id) setSelectedId(null);
+    if (openCommentId === id) setOpenCommentId(null);
+  }
 
-        {/* ===== Comment panel (viewer / editor) ===== */}
-{openCommentId && (
-  <div
-    data-comment-panel
-    ref={commentRef}
-    className="fixed z-50 right-4 top-24 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
-    onClick={(e) => e.stopPropagation()} // ne pas déclencher la désélection globale
-    role="dialog"
-    aria-modal="true"
-  >
-    {/* Header */}
-    <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200">
-      <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wider text-zinc-500">Commentaire</div>
-        <div className="font-semibold truncate">
-          {state.items[openCommentId]?.name ?? openCommentId}
-        </div>
-      </div>
+  function handleDragStart(event: any) {
+    setActiveId(event.active?.id ?? null);
+  }
 
-      <div className="flex items-center gap-2">
-        {!isEditingComment ? (
-          <button
-            type="button"
-            className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
-            onClick={() => {
-              setDraftComment(state.items[openCommentId]?.comment ?? "");
-              setIsEditingComment(true);
-            }}
-          >
-            Éditer
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
-              onClick={() => {
-                // Annuler édition
-                setIsEditingComment(false);
-                setDraftComment("");
-              }}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="px-2 py-1 text-sm rounded-md bg-amber-500 text-black hover:bg-amber-400"
-              onClick={() => {
-                if (!openCommentId) return;
-                const value = draftComment.trim();
-                setState((s) => {
-                  const items = { ...s.items };
-                  if (items[openCommentId]) {
-                    items[openCommentId] = {
-                      ...items[openCommentId],
-                      comment: value || undefined,
-                    };
-                  }
-                  return { ...s, items };
-                });
-                setIsEditingComment(false);
-                setDraftComment("");
-              }}
-            >
-              Enregistrer
-            </button>
-          </>
-        )}
+  function handleDragOver(event: any) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    const sourceContainer = getContainerByItem(activeId);
+    const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
+    if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
 
-        {/* Supprimer le commentaire */}
-        <button
-          type="button"
-          className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
-          onClick={() => {
-            if (!openCommentId) return;
-            setState((s) => {
-              const items = { ...s.items };
-              if (items[openCommentId]) {
-                items[openCommentId] = { ...items[openCommentId], comment: undefined };
-              }
-              return { ...s, items };
+    setState((prev) => {
+      const next = { ...prev, containers: { ...prev.containers } };
+      const sourceItems = [...(next.containers[sourceContainer] || [])];
+      const destItems = [...(next.containers[destContainer] || [])];
+      const idx = sourceItems.indexOf(activeId);
+      if (idx > -1) sourceItems.splice(idx, 1);
+      destItems.push(activeId);
+      next.containers[sourceContainer] = sourceItems;
+      next.containers[destContainer] = destContainer === next.poolId
+        ? sortIdsAlpha(destItems, next.items)
+        : destItems;
+      return next;
+    });
+  }
+
+  function handleDragEnd(event: any) {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over) return;
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    const sourceContainer = getContainerByItem(activeId);
+    const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
+    if (!sourceContainer || !destContainer) return;
+    if (sourceContainer === destContainer) {
+      setState((prev) => {
+        if (sourceContainer === prev.poolId) {
+          const sorted = sortIdsAlpha([...prev.containers[sourceContainer]], prev.items);
+          return { ...prev, containers: { ...prev.containers, [sourceContainer]: sorted } };
+        }
+        const items = [...prev.containers[sourceContainer]];
+        const oldIndex = items.indexOf(activeId);
+        let newIndex = items.indexOf(overId);
+        if (newIndex === -1) newIndex = oldIndex;
+        return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) } };
+      });
+    }
+  }
+
+  function resetAll() {
+    setState(stateFromNames([]));
+    history.replaceState(null, "", "#");
+  }
+
+  function exportState() {
+    try {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tierlist2d_state.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      alert("Export impossible dans cet environnement.");
+    }
+  }
+
+  function importStateFromFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(String(reader.result));
+        if (Array.isArray(obj)) {
+          if (obj.length && typeof obj[0] === "object" && obj[0].name) {
+            const items: Record<string, Item> = {};
+            const pool: string[] = [];
+            obj.forEach(({ name, image, comment }: any) => {
+              const base = slug(name) || Math.random().toString(36).slice(2);
+              const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+              items[uid] = {
+                id: uid,
+                name,
+                image,
+                comment,
+                axisPositions: state.axes.reduce((acc, axis) => ({ ...acc, [axis.id]: null }), {}),
+              };
+              pool.push(uid);
             });
-            setIsEditingComment(false);
-            setDraftComment("");
-          }}
-        >
-          Supprimer
-        </button>
+            const containers = makeEmptyContainers(vAxis.tiers.length, hAxis.tiers.length);
+            containers[POOL_ID] = sortIdsAlpha(pool, items);
+            setState(s => ({ ...s, items, containers }));
+          }
+          return;
+        }
+        const mig = migrateOldState(obj);
+        if (mig) setState(mig);
+      } catch {
+        alert("Fichier invalide");
+      }
+    };
+    reader.readAsText(file);
+  }
 
-        {/* Fermer */}
-        <button
-          type="button"
-          className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
-          onClick={() => {
-            setOpenCommentId(null);
-            setIsEditingComment(false);
-            setDraftComment("");
-          }}
-        >
-          ×
-        </button>
-      </div>
-    </div>
+  function shareURL() {
+    const enc = encodeState(state);
+    if (!enc) return;
+    const url = `${location.origin}${location.pathname}#${enc}`;
+    navigator.clipboard?.writeText(url);
+    alert("Lien copié dans le presse-papiers");
+  }
 
-    {/* Corps */}
-    <div className="p-3 text-sm leading-relaxed">
-      {!isEditingComment ? (
-        <div className="whitespace-pre-wrap">
-          {state.items[openCommentId]?.comment || <span className="text-zinc-500">—</span>}
+  async function publishSeed(explicitId?: string) {
+    try {
+      setPublishing(true);
+      const encoded = encodeState(state);
+      const payload: any = { data: encoded };
+      if (explicitId && explicitId.trim()) payload.id = explicitId.trim();
+      const res = await fetch('/api/seed', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const id: string = j.id;
+      setLastSeedId(id);
+      try {
+        localStorage.setItem('tier2d-last-seed-id', id);
+      } catch {}
+      const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
+      await navigator.clipboard?.writeText(share);
+      alert(`Seed publié !\nID: ${id}\nLien copié : ${share}`);
+    } catch (e: any) {
+      alert(`Échec publication du seed. ${e?.message || ''}\nAs-tu bien configuré Vercel Blob et la variable BLOB_READ_WRITE_TOKEN ?`);
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function loadSeed(input: string) {
+    try {
+      setLoadingSeed(true);
+      let url = input.trim();
+      if (!/^https?:\/\//i.test(url)) url = `/api/seed/${encodeURIComponent(url)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const dec = decodeState(j.data);
+      const mig = migrateOldState(dec);
+      if (mig) {
+        setState(mig);
+        if (j.id) {
+          setLastSeedId(j.id);
+          try {
+            localStorage.setItem('tier2d-last-seed-id', j.id);
+          } catch {}
+        }
+        alert('Seed chargée');
+      } else {
+        alert('Seed invalide.');
+      }
+    } catch (e: any) {
+      alert(`Échec chargement du seed. ${e?.message || ''}`);
+    } finally {
+      setLoadingSeed(false);
+    }
+  }
+
+  function importPairs() {
+    const entries = parsePairs(pairsText);
+    if (!entries.length) return;
+    const items = { ...state.items };
+    const pool = [...(state.containers[state.poolId] || [])];
+    for (const { name, image, comment } of entries) {
+      const base = slug(name) || Math.random().toString(36).slice(2);
+      const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+      items[uid] = {
+        id: uid,
+        name,
+        image,
+        comment,
+        axisPositions: state.axes.reduce((acc, axis) => ({ ...acc, [axis.id]: null }), {}),
+      };
+      pool.push(uid);
+    }
+    setPairsText("");
+    setState((s) => ({
+      ...s,
+      items,
+      containers: { ...s.containers, [s.poolId]: sortIdsAlpha(pool, items) },
+    }));
+  }
+
+  function createNewAxis() {
+    const newId = `axis-${Date.now()}`;
+    const newAxis: AxisDefinition = {
+      id: newId,
+      label: `Nouvel axe ${state.axes.length + 1}`,
+      tiers: [
+        { label: "Tier 1", color: "#22c55e" },
+        { label: "Tier 2", color: "#3b82f6" },
+        { label: "Tier 3", color: "#ef4444" },
+      ],
+      tierWidths: [220, 220, 220],
+    };
+    setState(prev => {
+      const items = { ...prev.items };
+      for (const id in items) {
+        items[id] = {
+          ...items[id],
+          axisPositions: { ...items[id].axisPositions, [newId]: null },
+        };
+      }
+      return { ...prev, axes: [...prev.axes, newAxis], items };
+    });
+  }
+
+  function deleteAxis(axisId: string) {
+    if (state.axes.length <= 2) {
+      alert("Vous devez conserver au moins 2 axes");
+      return;
+    }
+    if (axisId === state.activeVerticalAxisId || axisId === state.activeHorizontalAxisId) {
+      alert("Impossible de supprimer un axe actif. Changez d'abord les axes affichés.");
+      return;
+    }
+    setState(prev => {
+      const items = { ...prev.items };
+      for (const id in items) {
+        const axisPositions = { ...items[id].axisPositions };
+        delete axisPositions[axisId];
+        items[id] = { ...items[id], axisPositions };
+      }
+      return { ...prev, axes: prev.axes.filter(a => a.id !== axisId), items };
+    });
+  }
+
+  function updateAxisLabel(axisId: string, label: string) {
+    setState(prev => ({
+      ...prev,
+      axes: prev.axes.map(a => a.id === axisId ? { ...a, label } : a),
+    }));
+  }
+
+  function addTierToAxis(axisId: string) {
+    setState(prev => ({
+      ...prev,
+      axes: prev.axes.map(a => {
+        if (a.id !== axisId) return a;
+        const newTiers = [...a.tiers, { label: `Tier ${a.tiers.length + 1}`, color: "#94a3b8" }];
+        const newWidths = a.tierWidths ? [...a.tierWidths, 220] : undefined;
+        return { ...a, tiers: newTiers, tierWidths: newWidths };
+      }),
+    }));
+  }
+
+  function removeTierFromAxis(axisId: string, tierIndex: number) {
+    setState(prev => ({
+      ...prev,
+      axes: prev.axes.map(a => {
+        if (a.id !== axisId) return a;
+        const newTiers = a.tiers.filter((_, i) => i !== tierIndex);
+        const newWidths = a.tierWidths ? a.tierWidths.filter((_, i) => i !== tierIndex) : undefined;
+        return { ...a, tiers: newTiers, tierWidths: newWidths };
+      }),
+    }));
+  }
+
+  function updateTier(axisId: string, tierIndex: number, updates: Partial<Tier>) {
+    setState(prev => ({
+      ...prev,
+      axes: prev.axes.map(a => {
+        if (a.id !== axisId) return a;
+        const newTiers = a.tiers.map((t, i) => i === tierIndex ? { ...t, ...updates } : t);
+        return { ...a, tiers: newTiers };
+      }),
+    }));
+  }
+
+  const T = DARK;
+
+  const colsPx = (hAxis.tierWidths || Array(hAxis.tiers.length).fill(220))
+    .map(w => `${w}px`)
+    .join(" ");
+
+  const gridTemplate: React.CSSProperties = {
+    gridTemplateColumns: `minmax(140px, max-content) ${colsPx}`,
+  };
+
+  const poolIds = state.containers[state.poolId] || [];
+  const filteredPoolIds = poolQuery
+    ? poolIds.filter((id) => normalizeText(state.items[id]?.name || id).includes(normalizeText(poolQuery)))
+    : poolIds;
+
+  const showAlphaNav = filteredPoolIds.length > 1000;
+
+  const alphaFilteredPoolIds = poolAlpha
+    ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
+    : filteredPoolIds;
+
+  return (
+    <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const containers = makeEmptyContainers(vAxis.tiers.length, hAxis.tiers.length);
+                containers[state.poolId] = sortIdsAlpha(Object.values(state.containers).flat(), state.items);
+                setState(s => ({ ...s, containers }));
+              }}
+              title="Tout renvoyer en bas"
+            >
+              <Scissors className="w-4 h-4 mr-2" /> Vider la grille
+            </Button>
+            <Button variant="outline" className={OUTLINE_DARK} onClick={exportState}>
+              <Download className="w-4 h-4 mr-2" /> Exporter
+            </Button>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <Upload className="w-4 h-4" />
+              <span className="text-sm">Importer .json</span>
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importStateFromFile(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <Button onClick={shareURL}>
+              <Link2 className="w-4 h-4 mr-2" /> Partager le lien
+            </Button>
+            <Button variant="destructive" onClick={resetAll}>
+              <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
+            </Button>
+          </div>
         </div>
-      ) : (
-        <Textarea
-          value={draftComment}
-          onChange={(e) => setDraftComment(e.target.value)}
-          rows={8}
-          className="w-full"
-          placeholder="Écris ton commentaire ici…"
-        />
-      )}
-    </div>
-  </div>
-)}
 
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-2">
+            <CardTitle>Mode d'emploi / Sauvegarde & partage</CardTitle>
+            <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowHelp(v => !v)}>
+              {showHelp ? "Masquer" : "Afficher"}
+            </Button>
+          </CardHeader>
+          {showHelp && (
+            <CardContent className="space-y-4">
+              <ul className={cx("text-sm list-disc pl-5", T.mutedText)}>
+                {INSTRUCTIONS.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className={INPUT_DARK + " w-56"}
+                  placeholder="ID de la seed ou URL"
+                  value={seedInput}
+                  onChange={(e) => setSeedInput(e.target.value)}
+                />
+                <Button variant="outline" className={OUTLINE_DARK} disabled={loadingSeed} onClick={() => loadSeed(seedInput)}>
+                  {loadingSeed ? "Chargement…" : "Charger seed"}
+                </Button>
+                <Button variant="outline" className={OUTLINE_DARK} disabled={publishing} onClick={() => publishSeed()}>
+                  {publishing ? "Publication…" : "Publier (nouvelle seed)"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className={OUTLINE_DARK}
+                  disabled={publishing || !lastSeedId}
+                  onClick={() => lastSeedId && publishSeed(lastSeedId)}
+                >
+                  {publishing ? "Mise à jour…" : "Mettre à jour la seed"}
+                </Button>
+                {lastSeedId && <span className={cx("text-xs", T.mutedText)}>Dernier seed : <code>{lastSeedId}</code></span>}
+              </div>
+            </CardContent>
+          )}
+        </Card>
 
-        {/* Drag overlay */}
-        <DragOverlay>
-          {activeId ? (
-            <Tile
-              id={activeId}
-              name={state.items[activeId]?.name ?? ""}
-              image={state.items[activeId]?.image}
-              comment={state.items[activeId]?.comment}
-              tileSize={state.tileSize}
-              isCommentOpen={openCommentId === activeId}
-              onCommentToggle={toggleCommentFor}
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-2">
+            <CardTitle>Gestion des axes</CardTitle>
+            <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowAxisManager(v => !v)}>
+              {showAxisManager ? "Masquer" : "Afficher"}
+            </Button>
+          </CardHeader>
+          {showAxisManager && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-2 block">Axe vertical actif</Label>
+                  <select
+                    className={cx("w-full p-2 rounded", INPUT_DARK)}
+                    value={state.activeVerticalAxisId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      if (newId === state.activeHorizontalAxisId) {
+                        alert("L'axe vertical ne peut pas être le même que l'axe horizontal");
+                        return;
+                      }
+                      const newAxis = state.axes.find(a => a.id === newId);
+                      if (!newAxis) return;
+                      const containers = makeEmptyContainers(newAxis.tiers.length, hAxis.tiers.length);
+                      for (const [id, item] of Object.entries(state.items)) {
+                        const vPos = item.axisPositions[newId];
+                        const hPos = item.axisPositions[state.activeHorizontalAxisId];
+                        if (vPos !== null && hPos !== null && vPos < newAxis.tiers.length && hPos < hAxis.tiers.length) {
+                          containers[`r${vPos}-c${hPos}`].push(id);
+                        } else {
+                          containers[POOL_ID].push(id);
+                        }
+                      }
+                      containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], state.items);
+                      setState(s => ({ ...s, activeVerticalAxisId: newId, containers }));
+                    }}
+                  >
+                    {state.axes.map(axis => (
+                      <option key={axis.id} value={axis.id}>{axis.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="mb-2 block">Axe horizontal actif</Label>
+                  <select
+                    className={cx("w-full p-2 rounded", INPUT_DARK)}
+                    value={state.activeHorizontalAxisId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      if (newId === state.activeVerticalAxisId) {
+                        alert("L'axe horizontal ne peut pas être le même que l'axe vertical");
+                        return;
+                      }
+                      const newAxis = state.axes.find(a => a.id === newId);
+                      if (!newAxis) return;
+                      const containers = makeEmptyContainers(vAxis.tiers.length, newAxis.tiers.length);
+                      for (const [id, item] of Object.entries(state.items)) {
+                        const vPos = item.axisPositions[state.activeVerticalAxisId];
+                        const hPos = item.axisPositions[newId];
+                        if (vPos !== null && hPos !== null && vPos < vAxis.tiers.length && hPos < newAxis.tiers.length) {
+                          containers[`r${vPos}-c${hPos}`].push(id);
+                        } else {
+                          containers[POOL_ID].push(id);
+                        }
+                      }
+                      containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], state.items);
+                      setState(s => ({ ...s, activeHorizontalAxisId: newId, containers }));
+                    }}
+                  >
+                    {state.axes.map(axis => (
+                      <option key={axis.id} value={axis.id}>{axis.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Axes disponibles</Label>
+                <div className="space-y-2">
+                  {state.axes.map(axis => (
+                    <div key={axis.id} className="flex items-center gap-2 p-2 rounded border border-zinc-700">
+                      <div className="flex-1">
+                        <div className="font-semibold">{axis.label}</div>
+                        <div className={cx("text-xs", T.mutedText)}>{axis.tiers.length} tiers</div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className={OUTLINE_DARK}
+                        size="sm"
+                        onClick={() => setEditingAxisId(axis.id)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className={OUTLINE_DARK}
+                        size="sm"
+                        onClick={() => deleteAxis(axis.id)}
+                        disabled={state.axes.length <= 2}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button onClick={createNewAxis} className="mt-2">
+                  <Plus className="w-4 h-4 mr-2" /> Créer un axe
+                </Button>
+              </div>
+
+              {editingAxisId && (() => {
+                const axis = state.axes.find(a => a.id === editingAxisId);
+                if (!axis) return null;
+                return (
+                  <Card className="border-2 border-indigo-500">
+                    <CardHeader>
+                      <CardTitle>Éditer : {axis.label}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label>Nom de l'axe</Label>
+                        <Input
+                          className={INPUT_DARK}
+                          value={axis.label}
+                          onChange={(e) => updateAxisLabel(axis.id, e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>Tiers de cet axe</Label>
+                        <div className="space-y-2 mt-2">
+                          {axis.tiers.map((tier, i) => (
+                            <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                              <Input
+                                className={INPUT_DARK}
+                                value={tier.label}
+                                onChange={(e) => updateTier(axis.id, i, { label: e.target.value })}
+                              />
+                              <input
+                                type="color"
+                                value={tier.color}
+                                onChange={(e) => updateTier(axis.id, i, { color: e.target.value })}
+                                className="h-10 w-12 rounded cursor-pointer border"
+                              />
+                              <div
+                                className="px-3 py-2 rounded-md text-xs font-semibold"
+                                style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
+                              >
+                                Aperçu
+                              </div>
+                              <Button
+                                variant="outline"
+                                className={OUTLINE_DARK}
+                                size="icon"
+                                onClick={() => removeTierFromAxis(axis.id, i)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button onClick={() => addTierToAxis(axis.id)} size="sm">
+                            <Plus className="w-4 h-4 mr-2" /> Ajouter un tier
+                          </Button>
+                        </div>
+                      </div>
+                      <Button onClick={() => setEditingAxisId(null)}>Fermer</Button>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </CardContent>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Actions sur les tuiles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className={INPUT_DARK + " w-44"}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+              />
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                onClick={() => {
+                  const id = Array.from(matchedIds)[0];
+                  if (!id) return;
+                  const el = document.querySelector(`[data-item-id="${id}"]`) as HTMLElement | null;
+                  el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+                }}
+              >
+                Trouver
+              </Button>
+              {search && (
+                <Button variant="outline" className={OUTLINE_DARK} onClick={() => setSearch("")}>
+                  Effacer
+                </Button>
+              )}
+              <div className="w-px h-6 bg-zinc-700 mx-1" />
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={!selectedId}
+                onClick={() => selectedId && toggleCommentFor(selectedId)}
+              >
+                Ajouter / ouvrir un commentaire
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={!selectedId || !state.items[selectedId]?.comment}
+                onClick={() => {
+                  if (!selectedId) return;
+                  setState(prev => {
+                    const items = { ...prev.items };
+                    if (items[selectedId]) {
+                      items[selectedId] = { ...items[selectedId], comment: undefined };
+                    }
+                    return { ...prev, items };
+                  });
+                  if (openCommentId === selectedId) setOpenCommentId(null);
+                }}
+              >
+                Supprimer le commentaire
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={!selectedId}
+                onClick={() => selectedId && deleteItem(selectedId)}
+              >
+                Supprimer la tuile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
+          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
+            <div className="grid gap-2 p-2" style={gridTemplate}>
+              <div />
+              {hAxis.tiers.map((tier, ci) => (
+                <div
+                  key={`colh-${ci}`}
+                  className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                  style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
+                >
+                  {tier.label}
+                </div>
+              ))}
+
+              {vAxis.tiers.map((rowTier, ri) => (
+                <React.Fragment key={`row-${ri}`}>
+                  <div
+                    className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                    style={{ backgroundColor: rowTier.color, color: textColorForBg(rowTier.color) }}
+                  >
+                    {rowTier.label}
+                  </div>
+
+                  {hAxis.tiers.map((_, ci) => {
+                    const id = `r${ri}-c${ci}`;
+                    const items = state.containers[id] || [];
+                    return (
+                      <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                        <CardContent className={cx("p-2", T.cardBg)}>
+                          <SortableContext items={items} strategy={rectSortingStrategy}>
+                            <Droppable
+                              id={id}
+                              onClick={() => {
+                                if (!selectedId) return;
+                                const currentContainer = getContainerByItem(selectedId);
+                                if (currentContainer === id) {
+                                  setSelectedId(null);
+                                  return;
+                                }
+                                moveToContainer(selectedId, id);
+                              }}
+                            >
+                              <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                                {items.map((itemId) => (
+                                  <Tile
+                                    key={itemId}
+                                    id={itemId}
+                                    name={state.items[itemId]?.name ?? itemId}
+                                    image={state.items[itemId]?.image}
+                                    comment={state.items[itemId]?.comment}
+                                    tileSize={state.tileSize}
+                                    selected={selectedId === itemId}
+                                    highlighted={matchedIds.has(itemId)}
+                                    onClick={() => setSelectedId(itemId)}
+                                    isCommentOpen={openCommentId === itemId}
+                                    onCommentToggle={toggleCommentFor}
+                                  />
+                                ))}
+                              </div>
+                            </Droppable>
+                          </SortableContext>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle>Bac (non classés)</CardTitle>
+              {showAlphaNav && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button className={chipCls(poolAlpha === null)} onClick={() => setPoolAlpha(null)}>Tous</button>
+                  {ALPHA_BUCKETS.map((k) => (
+                    <button
+                      key={k}
+                      className={chipCls(poolAlpha === k)}
+                      onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
+                    >
+                      {k === "Autres" ? "Autres" : `${k[0]}–${k[1]}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className={T.cardBg}>
+              <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
+                <Droppable id={state.poolId}>
+                  <div
+                    data-pool-root="1"
+                    className="flex flex-wrap gap-2 p-2"
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
+                      if (!selectedId) return;
+                      const currentContainer = getContainerByItem(selectedId);
+                      if (currentContainer === state.poolId) {
+                        setSelectedId(null);
+                        return;
+                      }
+                      moveToContainer(selectedId, state.poolId);
+                    }}
+                  >
+                    {alphaFilteredPoolIds.map((itemId) => (
+                      <Tile
+                        key={itemId}
+                        id={itemId}
+                        name={state.items[itemId]?.name ?? itemId}
+                        image={state.items[itemId]?.image}
+                        comment={state.items[itemId]?.comment}
+                        tileSize={state.tileSize}
+                        selected={selectedId === itemId}
+                        highlighted={matchedIds.has(itemId)}
+                        onClick={() => setSelectedId(itemId)}
+                        isCommentOpen={openCommentId === itemId}
+                        onCommentToggle={toggleCommentFor}
+                      />
+                    ))}
+                  </div>
+                </Droppable>
+              </SortableContext>
+            </CardContent>
+          </Card>
+
+          {openCommentId && (
+            <div
+              data-comment-panel
+              ref={commentRef}
+              className="fixed z-50 right-4 top-24 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200">
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Commentaire</div>
+                  <div className="font-semibold truncate">
+                    {state.items[openCommentId]?.name ?? openCommentId}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isEditingComment ? (
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                      onClick={() => {
+                        setDraftComment(state.items[openCommentId]?.comment ?? "");
+                        setIsEditingComment(true);
+                      }}
+                    >
+                      Éditer
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                        onClick={() => {
+                          setIsEditingComment(false);
+                          setDraftComment("");
+                        }}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-sm rounded-md bg-amber-500 text-black hover:bg-amber-400"
+                        onClick={() => {
+                          if (!openCommentId) return;
+                          const value = draftComment.trim();
+                          setState((s) => {
+                            const items = { ...s.items };
+                            if (items[openCommentId]) {
+                              items[openCommentId] = {
+                                ...items[openCommentId],
+                                comment: value || undefined,
+                              };
+                            }
+                            return { ...s, items };
+                          });
+                          setIsEditingComment(false);
+                          setDraftComment("");
+                        }}
+                      >
+                        Enregistrer
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                    onClick={() => {
+                      if (!openCommentId) return;
+                      setState((s) => {
+                        const items = { ...s.items };
+                        if (items[openCommentId]) {
+                          items[openCommentId] = { ...items[openCommentId], comment: undefined };
+                        }
+                        return { ...s, items };
+                      });
+                      setIsEditingComment(false);
+                      setDraftComment("");
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                    onClick={() => {
+                      setOpenCommentId(null);
+                      setIsEditingComment(false);
+                      setDraftComment("");
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="p-3 text-sm leading-relaxed">
+                {!isEditingComment ? (
+                  <div className="whitespace-pre-wrap">
+                    {state.items[openCommentId]?.comment || <span className="text-zinc-500">—</span>}
+                  </div>
+                ) : (
+                  <Textarea
+                    value={draftComment}
+                    onChange={(e) => setDraftComment(e.target.value)}
+                    rows={8}
+                    className="w-full"
+                    placeholder="Écris ton commentaire ici…"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          <DragOverlay>
+            {activeId ? (
+              <Tile
+                id={activeId}
+                name={state.items[activeId]?.name ?? ""}
+                image={state.items[activeId]?.image}
+                comment={state.items[activeId]?.comment}
+                tileSize={state.tileSize}
+                isCommentOpen={openCommentId === activeId}
+                onCommentToggle={toggleCommentFor}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Importer noms + images + commentaires</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className={cx("text-sm", T.mutedText)}>
+              Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>,{" "}
+              <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>,{" "}
+              <code>Nom;URL;Commentaire</code>. L'image et le commentaire sont optionnels.
+            </p>
+            <Textarea
+              className={cx("w-full resize-y", INPUT_DARK)}
+              rows={6}
+              value={pairsText}
+              onChange={(e) => setPairsText(e.target.value)}
+              placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\nPNL | https://exemple.com/pnl.webp`}
             />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+            <div className="flex gap-2">
+              <Button onClick={importPairs}>
+                <Upload className="w-4 h-4 mr-2" />
+                Ajouter au bac
+              </Button>
+              <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Vider la zone
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-
-          
-      {/* ====== Import noms + images + commentaires ====== */}
-<Card>
-  <CardHeader>
-    <CardTitle>Importer noms + images + commentaires</CardTitle>
-  </CardHeader>
-  <CardContent className="space-y-3">
-    <p className={cx("text-sm", T.mutedText)}>
-      Une ligne par artiste. Formats acceptés :{" "}
-      <code>Nom    URL    Commentaire</code>,{" "}
-      <code>Nom | URL | Commentaire</code>,{" "}
-      <code>Nom,URL,Commentaire</code>,{" "}
-      <code>Nom;URL;Commentaire</code>. L'image et le commentaire sont optionnels.
-    </p>
-
-    <Textarea
-      className={cx("w-full resize-y", INPUT_DARK)}
-      rows={6}
-      value={pairsText}
-      onChange={(e) => setPairsText(e.target.value)}
-      placeholder={`Ex.
-Nekfeu	https://exemple.com/nekfeu.jpg Un court commentaire
-PNL | https://exemple.com/pnl.webp`}
-    />
-
-    <div className="flex gap-2">
-      <Button onClick={importPairs}>
-        <Upload className="w-4 h-4 mr-2" />
-        Ajouter au bac
-      </Button>
-      <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
-        <Trash2 className="w-4 h-4 mr-2" />
-        Vider la zone
-      </Button>
-    </div>
-  </CardContent>
-</Card>
-          
-      {/* … ta carte d'import … */}
-
-      <div className={cx("text-xs", T.mutedText)}>
-        <p>
-          Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton Â« Partager le lien Â»).
-          Pour un lien public stable, déployez ce fichier sur Vercel.
-        </p>
+        <div className={cx("text-xs", T.mutedText)}>
+          <p>
+            Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
+            Pour un lien public stable, déployez ce fichier sur Vercel.
+          </p>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }
-
