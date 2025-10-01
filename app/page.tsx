@@ -1094,7 +1094,7 @@ const alphaFilteredPoolIds = poolAlpha
 
 // ---- render ----
 // IMPORTANT: keep the leading semicolon to avoid ASI issues if the previous line ends with a parenthesis
-;return (
+return (
   <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
       {/* ====== Barre de titres + actions ====== */}
