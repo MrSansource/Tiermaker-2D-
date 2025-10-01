@@ -1727,7 +1727,7 @@ return (
           </CardContent>
         </Card>
 
-<div className={cx("text-xs", T.mutedText)}>
+        <div className={cx("text-xs", T.mutedText)}>
           <p>
             Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
             Pour un lien public stable, déployez ce fichier sur Vercel.
