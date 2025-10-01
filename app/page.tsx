@@ -1140,6 +1140,8 @@ return (
     <RefreshCcw className="w-4 h-4 mr-2" /> Réinitialiser
   </Button>
 
+          <div>
+          <div>
 
       {/* ====== Mode d'emploi / Seed ====== */}
    {/* ====== Mode d'emploi / Sauvegarde & partage ====== */}
