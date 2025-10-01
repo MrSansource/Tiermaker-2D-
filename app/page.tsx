@@ -1337,8 +1337,6 @@ return (
   )}
 </Card>
 
-</Card>
-
 {/* Nouvelle section : Actions sur les tuiles */}
 <Card>
   <CardHeader>
