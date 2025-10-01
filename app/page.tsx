@@ -22,10 +22,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Edit, Filter } from "lucide-react";
 
-// =====================
-// Types
-// =====================
-
 type Tier = { label: string; color: string };
 
 type AxisDefinition = {
@@ -33,7 +29,7 @@ type AxisDefinition = {
   label: string;
   tiers: Tier[];
   tierWidths?: number[];
-  unclassifiedSize?: number; // pour ligne/colonne "À classer"
+  unclassifiedSize?: number;
 };
 
 type Item = {
@@ -41,7 +37,7 @@ type Item = {
   name: string;
   image?: string;
   comment?: string;
-  axisPositions: Record<string, number | null>; // null = jamais classé, -1 = "À classer", 0+ = tier index
+  axisPositions: Record<string, number | null>;
 };
 
 type AppState = {
@@ -54,10 +50,6 @@ type AppState = {
   tileSize: number;
   forceDark: boolean;
 };
-
-// =====================
-// Utils
-// =====================
 
 const POOL_ID = "__pool__";
 const UNCLASSIFIED_INDEX = -1;
@@ -94,9 +86,7 @@ const slug = (s: string): string => {
       .replace(NON_ALNUM_RE, "-")
       .replace(EDGE_DASH_RE, "");
   } catch {
-    return s.toLowerCase().trim()
-      .replace(NON_ALNUM_RE, "-")
-      .replace(EDGE_DASH_RE, "");
+    return s.toLowerCase().trim().replace(NON_ALNUM_RE, "-").replace(EDGE_DASH_RE, "");
   }
 };
 
@@ -129,7 +119,6 @@ function textColorForBg(hex: string) {
 function parsePairs(text: string): Array<{ name: string; image?: string; comment?: string }> {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: Array<{ name: string; image?: string; comment?: string }> = [];
-
   for (const line of lines) {
     const m = line.match(/https?:\/\/\S+/);
     if (m) {
@@ -205,9 +194,6 @@ function chipCls(active: boolean) {
   ].join(" ");
 }
 
-// =====================
-// Tile Component
-// =====================
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, isCommentOpen, onCommentToggle,
 }: {
@@ -287,26 +273,15 @@ function Droppable({ id, children, onClick }: { id: string; children: React.Reac
   );
 }
 
-// =====================
-// State Helpers
-// =====================
 function makeEmptyContainers(vTiers: number, hTiers: number) {
   const containers: Record<string, string[]> = {};
-  // Grille normale (indices 0+)
   for (let r = 0; r < vTiers; r++) {
     for (let c = 0; c < hTiers; c++) {
       containers[`r${r}-c${c}`] = [];
     }
   }
-  // Ligne "À classer" (r-1)
-  for (let c = 0; c < hTiers; c++) {
-    containers[`r-1-c${c}`] = [];
-  }
-  // Colonne "À classer" (c-1)
-  for (let r = 0; r < vTiers; r++) {
-    containers[`r${r}-c-1`] = [];
-  }
-  // Intersection "À classer" × "À classer"
+  for (let c = 0; c < hTiers; c++) containers[`r-1-c${c}`] = [];
+  for (let r = 0; r < vTiers; r++) containers[`r${r}-c-1`] = [];
   containers[`r-1-c-1`] = [];
   containers[POOL_ID] = [];
   return containers;
@@ -374,10 +349,7 @@ function decodeState(s: string): any | null {
 
 function migrateOldState(obj: any): AppState | null {
   if (!obj) return null;
-
-  if (obj.axes && Array.isArray(obj.axes)) {
-    return obj as AppState;
-  }
+  if (obj.axes && Array.isArray(obj.axes)) return obj as AppState;
 
   const rows = Array.isArray(obj.rows)
     ? obj.rows.map((r: any, i: number) => typeof r === "string" ? { label: r, color: DEFAULT_ROWS[i % DEFAULT_ROWS.length].color } : r)
@@ -451,9 +423,6 @@ function migrateOldState(obj: any): AppState | null {
   };
 }
 
-// =====================
-// Main App
-// =====================
 export default function TierList2D() {
   const initialState = useMemo<AppState>(() => {
     const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
@@ -985,8 +954,6 @@ export default function TierList2D() {
       alert("L'axe vertical ne peut pas être le même que l'axe horizontal");
       return;
     }
-    const newAxis = state.axes.find(a => a.id === newId);
-    if (!newAxis) return;
     setState(s => {
       const containers = rebuildContainersForAxes();
       return { ...s, activeVerticalAxisId: newId, containers };
@@ -998,8 +965,6 @@ export default function TierList2D() {
       alert("L'axe horizontal ne peut pas être le même que l'axe vertical");
       return;
     }
-    const newAxis = state.axes.find(a => a.id === newId);
-    if (!newAxis) return;
     setState(s => {
       const containers = rebuildContainersForAxes();
       return { ...s, activeHorizontalAxisId: newId, containers };
@@ -1039,7 +1004,7 @@ export default function TierList2D() {
     return Object.values(positions).some(v => v !== null);
   }).length;
 
-  return (
+return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
@@ -1325,10 +1290,8 @@ export default function TierList2D() {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
           <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
-              {/* Coin supérieur gauche vide */}
               <div />
               
-              {/* Headers colonnes : "À classer" + colonnes normales */}
               <div
                 className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                 style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
@@ -1345,7 +1308,6 @@ export default function TierList2D() {
                 </div>
               ))}
 
-              {/* Ligne "À classer" */}
               <div
                 className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                 style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
@@ -1353,7 +1315,6 @@ export default function TierList2D() {
                 À classer
               </div>
               
-              {/* Intersection "À classer" × "À classer" */}
               {(() => {
                 const id = `r-1-c-1`;
                 const items = state.containers[id] || [];
@@ -1395,9 +1356,51 @@ export default function TierList2D() {
                     </CardContent>
                   </Card>
                 );
+              })()}
+
+              {hAxis.tiers.map((_, ci) => {
+                const id = `r-1-c${ci}`;
+                const items = state.containers[id] || [];
+                return (
+                  <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                    <CardContent className={cx("p-2", T.cardBg)}>
+                      <SortableContext items={items} strategy={rectSortingStrategy}>
+                        <Droppable
+                          id={id}
+                          onClick={() => {
+                            if (!selectedId) return;
+                            const currentContainer = getContainerByItem(selectedId);
+                            if (currentContainer === id) {
+                              setSelectedId(null);
+                              return;
+                            }
+                            moveToContainer(selectedId, id);
+                          }}
+                        >
+                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                            {items.map((itemId) => (
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                              />
+                            ))}
+                          </div>
+                        </Droppable>
+                      </SortableContext>
+                    </CardContent>
+                  </Card>
+                );
               })}
 
-              {/* Lignes normales */}
               {vAxis.tiers.map((rowTier, ri) => (
                 <React.Fragment key={`row-${ri}`}>
                   <div
@@ -1407,7 +1410,6 @@ export default function TierList2D() {
                     {rowTier.label}
                   </div>
 
-                  {/* Colonne "À classer" pour cette ligne */}
                   {(() => {
                     const id = `r${ri}-c-1`;
                     const items = state.containers[id] || [];
@@ -1451,7 +1453,6 @@ export default function TierList2D() {
                     );
                   })()}
 
-                  {/* Cellules normales */}
                   {hAxis.tiers.map((_, ci) => {
                     const id = `r${ri}-c${ci}`;
                     const items = state.containers[id] || [];
@@ -1731,52 +1732,8 @@ export default function TierList2D() {
             Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
             Pour un lien public stable, déployez ce fichier sur Vercel.
           </p>
-        </div>
+          </div>
       </div>
     </div>
   );
 }
-                            if (!selectedId) return;
-                            const currentContainer = getContainerByItem(selectedId);
-                            if (currentContainer === id) {
-                              setSelectedId(null);
-                              return;
-                            }
-                            moveToContainer(selectedId, id);
-                          }}
-                        >
-                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
-                            {items.map((itemId) => (
-                              <Tile
-                                key={itemId}
-                                id={itemId}
-                                name={state.items[itemId]?.name ?? itemId}
-                                image={state.items[itemId]?.image}
-                                comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
-                                selected={selectedId === itemId}
-                                highlighted={matchedIds.has(itemId)}
-                                onClick={() => setSelectedId(itemId)}
-                                isCommentOpen={openCommentId === itemId}
-                                onCommentToggle={toggleCommentFor}
-                              />
-                            ))}
-                          </div>
-                        </Droppable>
-                      </SortableContext>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-
-              {/* Ligne "À classer" × colonnes normales */}
-              {hAxis.tiers.map((_, ci) => {
-                const id = `r-1-c${ci}`;
-                const items = state.containers[id] || [];
-                return (
-                  <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
-                    <CardContent className={cx("p-2", T.cardBg)}>
-                      <SortableContext items={items} strategy={rectSortingStrategy}>
-                        <Droppable
-                          id={id}
-                          onClick={() => {
