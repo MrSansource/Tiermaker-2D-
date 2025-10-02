@@ -1735,6 +1735,6 @@ return (
         </div>
       </div>
     </div>
-  );
+  </DndContext>
+);
 }
-// FIN DU FICHIER - ligne de debug
