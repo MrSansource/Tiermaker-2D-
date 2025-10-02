@@ -1695,7 +1695,6 @@ return (
               />
             ) : null}
           </DragOverlay>
-        </DndContext>
 
         <Card>
           <CardHeader>
