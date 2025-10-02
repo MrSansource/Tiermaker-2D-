@@ -193,7 +193,6 @@ function chipCls(active: boolean) {
     active ? "bg-zinc-200 text-zinc-900 border-zinc-300" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
   ].join(" ");
 }
-
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, isCommentOpen, onCommentToggle,
 }: {
@@ -280,8 +279,11 @@ function makeEmptyContainers(vTiers: number, hTiers: number) {
       containers[`r${r}-c${c}`] = [];
     }
   }
+  // Colonnes "À classer" (vertical = -1)
   for (let c = 0; c < hTiers; c++) containers[`r-1-c${c}`] = [];
+  // Lignes "À classer" (horizontal = -1)
   for (let r = 0; r < vTiers; r++) containers[`r${r}-c-1`] = [];
+  // Coin "À classer" × "À classer"
   containers[`r-1-c-1`] = [];
   containers[POOL_ID] = [];
   return containers;
@@ -386,7 +388,7 @@ function migrateOldState(obj: any): AppState | null {
     let stylePos: number | null = null;
 
     if (containerWithItem && containerWithItem !== POOL_ID) {
-      const match = containerWithItem.match(/^r(\d+)-c(\d+)$/);
+      const match = containerWithItem.match(/^r(-?\d+)-c(-?\d+)$/);
       if (match) {
         talentPos = parseInt(match[1]);
         stylePos = parseInt(match[2]);
@@ -422,7 +424,6 @@ function migrateOldState(obj: any): AppState | null {
     forceDark: true,
   };
 }
-
 export default function TierList2D() {
   const initialState = useMemo<AppState>(() => {
     const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
@@ -547,32 +548,34 @@ export default function TierList2D() {
     return null;
   };
 
-  function rebuildContainersForAxes() {
-    const containers = makeEmptyContainers(vAxis.tiers.length, hAxis.tiers.length);
+  // FONCTION CORRIGÉE : Rebuild des containers selon les axes actifs
+  function rebuildContainersForAxes(
+    items: Record<string, Item>,
+    vAxisId: string,
+    hAxisId: string,
+    vTiersCount: number,
+    hTiersCount: number
+  ) {
+    const containers = makeEmptyContainers(vTiersCount, hTiersCount);
     
-    for (const [id, item] of Object.entries(state.items)) {
-      const vPos = item.axisPositions[state.activeVerticalAxisId];
-      const hPos = item.axisPositions[state.activeHorizontalAxisId];
+    for (const [id, item] of Object.entries(items)) {
+      const vPos = item.axisPositions[vAxisId];
+      const hPos = item.axisPositions[hAxisId];
       
+      // Si les deux sont null, va au pool
       if (vPos === null && hPos === null) {
         containers[POOL_ID].push(id);
-      } else if (vPos === null || vPos === UNCLASSIFIED_INDEX || hPos === null || hPos === UNCLASSIFIED_INDEX) {
-        const r = vPos === null || vPos === UNCLASSIFIED_INDEX ? -1 : vPos;
-        const c = hPos === null || hPos === UNCLASSIFIED_INDEX ? -1 : hPos;
+      } else {
+        // Convertir null en -1 (à classer)
+        const r = vPos === null ? -1 : vPos;
+        const c = hPos === null ? -1 : hPos;
         const cid = `r${r}-c${c}`;
         if (!containers[cid]) containers[cid] = [];
         containers[cid].push(id);
-      } else {
-        const cid = `r${vPos}-c${hPos}`;
-        if (containers[cid]) {
-          containers[cid].push(id);
-        } else {
-          containers[POOL_ID].push(id);
-        }
       }
     }
     
-    containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], state.items);
+    containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], items);
     return containers;
   }
 
@@ -602,12 +605,13 @@ export default function TierList2D() {
             const r = parseInt(match[1]);
             const c = parseInt(match[2]);
             
-            const wasUnclassified = Object.values(axisPositions).every(v => v === null);
+            const wasFullyUnclassified = Object.values(axisPositions).every(v => v === null);
             
-            axisPositions[next.activeVerticalAxisId] = r === -1 ? UNCLASSIFIED_INDEX : r;
-            axisPositions[next.activeHorizontalAxisId] = c === -1 ? UNCLASSIFIED_INDEX : c;
+            axisPositions[next.activeVerticalAxisId] = r;
+            axisPositions[next.activeHorizontalAxisId] = c;
             
-            if (wasUnclassified) {
+            // Si c'était totalement non classé, mettre tous les autres axes à -1
+            if (wasFullyUnclassified) {
               for (const axis of next.axes) {
                 if (axis.id !== next.activeVerticalAxisId && axis.id !== next.activeHorizontalAxisId) {
                   axisPositions[axis.id] = UNCLASSIFIED_INDEX;
@@ -615,6 +619,10 @@ export default function TierList2D() {
               }
             }
           }
+        } else {
+          // Retour au pool : remettre les positions des axes actifs à null
+          axisPositions[next.activeVerticalAxisId] = null;
+          axisPositions[next.activeHorizontalAxisId] = null;
         }
         
         items[itemId] = { ...items[itemId], axisPositions };
@@ -709,7 +717,6 @@ export default function TierList2D() {
       });
     }
   }
-
   function resetAll() {
     setState(stateFromNames([]));
     history.replaceState(null, "", "#");
@@ -915,27 +922,81 @@ export default function TierList2D() {
   }
 
   function addTierToAxis(axisId: string) {
-    setState(prev => ({
-      ...prev,
-      axes: prev.axes.map(a => {
+    setState(prev => {
+      const newAxes = prev.axes.map(a => {
         if (a.id !== axisId) return a;
         const newTiers = [...a.tiers, { label: `Tier ${a.tiers.length + 1}`, color: "#94a3b8" }];
         const newWidths = a.tierWidths ? [...a.tierWidths, 220] : undefined;
         return { ...a, tiers: newTiers, tierWidths: newWidths };
-      }),
-    }));
+      });
+      
+      // Reconstruire les containers si l'axe modifié est actif
+      if (axisId === prev.activeVerticalAxisId || axisId === prev.activeHorizontalAxisId) {
+        const vAxis = newAxes.find(a => a.id === prev.activeVerticalAxisId)!;
+        const hAxis = newAxes.find(a => a.id === prev.activeHorizontalAxisId)!;
+        const containers = rebuildContainersForAxes(
+          prev.items,
+          prev.activeVerticalAxisId,
+          prev.activeHorizontalAxisId,
+          vAxis.tiers.length,
+          hAxis.tiers.length
+        );
+        return { ...prev, axes: newAxes, containers };
+      }
+      
+      return { ...prev, axes: newAxes };
+    });
   }
 
   function removeTierFromAxis(axisId: string, tierIndex: number) {
-    setState(prev => ({
-      ...prev,
-      axes: prev.axes.map(a => {
+    setState(prev => {
+      const axis = prev.axes.find(a => a.id === axisId);
+      if (!axis || axis.tiers.length <= 1) {
+        alert("Un axe doit avoir au moins 1 tier");
+        return prev;
+      }
+      
+      // Déplacer les items du tier supprimé vers "À classer"
+      const items = { ...prev.items };
+      for (const id in items) {
+        if (items[id].axisPositions[axisId] === tierIndex) {
+          items[id] = {
+            ...items[id],
+            axisPositions: { ...items[id].axisPositions, [axisId]: UNCLASSIFIED_INDEX }
+          };
+        } else if (items[id].axisPositions[axisId] !== null && 
+                   items[id].axisPositions[axisId]! > tierIndex) {
+          // Décaler les indices supérieurs
+          items[id] = {
+            ...items[id],
+            axisPositions: { ...items[id].axisPositions, [axisId]: items[id].axisPositions[axisId]! - 1 }
+          };
+        }
+      }
+      
+      const newAxes = prev.axes.map(a => {
         if (a.id !== axisId) return a;
         const newTiers = a.tiers.filter((_, i) => i !== tierIndex);
         const newWidths = a.tierWidths ? a.tierWidths.filter((_, i) => i !== tierIndex) : undefined;
         return { ...a, tiers: newTiers, tierWidths: newWidths };
-      }),
-    }));
+      });
+      
+      // Reconstruire les containers si l'axe modifié est actif
+      if (axisId === prev.activeVerticalAxisId || axisId === prev.activeHorizontalAxisId) {
+        const vAxis = newAxes.find(a => a.id === prev.activeVerticalAxisId)!;
+        const hAxis = newAxes.find(a => a.id === prev.activeHorizontalAxisId)!;
+        const containers = rebuildContainersForAxes(
+          items,
+          prev.activeVerticalAxisId,
+          prev.activeHorizontalAxisId,
+          vAxis.tiers.length,
+          hAxis.tiers.length
+        );
+        return { ...prev, axes: newAxes, items, containers };
+      }
+      
+      return { ...prev, axes: newAxes, items };
+    });
   }
 
   function updateTier(axisId: string, tierIndex: number, updates: Partial<Tier>) {
@@ -949,25 +1010,43 @@ export default function TierList2D() {
     }));
   }
 
+  // FONCTION CORRIGÉE : Switch vertical axis avec rebuild
   function switchVerticalAxis(newId: string) {
     if (newId === state.activeHorizontalAxisId) {
       alert("L'axe vertical ne peut pas être le même que l'axe horizontal");
       return;
     }
-    setState(s => {
-      const containers = rebuildContainersForAxes();
-      return { ...s, activeVerticalAxisId: newId, containers };
+    setState(prev => {
+      const vAxis = prev.axes.find(a => a.id === newId)!;
+      const hAxis = prev.axes.find(a => a.id === prev.activeHorizontalAxisId)!;
+      const containers = rebuildContainersForAxes(
+        prev.items,
+        newId,
+        prev.activeHorizontalAxisId,
+        vAxis.tiers.length,
+        hAxis.tiers.length
+      );
+      return { ...prev, activeVerticalAxisId: newId, containers };
     });
   }
 
+  // FONCTION CORRIGÉE : Switch horizontal axis avec rebuild
   function switchHorizontalAxis(newId: string) {
     if (newId === state.activeVerticalAxisId) {
       alert("L'axe horizontal ne peut pas être le même que l'axe vertical");
       return;
     }
-    setState(s => {
-      const containers = rebuildContainersForAxes();
-      return { ...s, activeHorizontalAxisId: newId, containers };
+    setState(prev => {
+      const vAxis = prev.axes.find(a => a.id === prev.activeVerticalAxisId)!;
+      const hAxis = prev.axes.find(a => a.id === newId)!;
+      const containers = rebuildContainersForAxes(
+        prev.items,
+        prev.activeVerticalAxisId,
+        newId,
+        vAxis.tiers.length,
+        hAxis.tiers.length
+      );
+      return { ...prev, activeHorizontalAxisId: newId, containers };
     });
   }
 
@@ -1004,17 +1083,30 @@ export default function TierList2D() {
     return Object.values(positions).some(v => v !== null);
   }).length;
 
-return (
+ return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D – Rap FR</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D — Rap FR</h1>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               onClick={() => {
-                const containers = makeEmptyContainers(vAxis.tiers.length, hAxis.tiers.length);
-                containers[state.poolId] = sortIdsAlpha(Object.values(state.containers).flat(), state.items);
+                const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId)!;
+                const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId)!;
+                const containers = rebuildContainersForAxes(
+                  state.items,
+                  state.activeVerticalAxisId,
+                  state.activeHorizontalAxisId,
+                  vAxis.tiers.length,
+                  hAxis.tiers.length
+                );
+                // Remettre tous les items au pool
+                const allIds = Object.keys(state.items);
+                containers[state.poolId] = sortIdsAlpha(allIds, state.items);
+                for (const key in containers) {
+                  if (key !== state.poolId) containers[key] = [];
+                }
                 setState(s => ({ ...s, containers }));
               }}
               title="Tout renvoyer en bas"
@@ -1696,7 +1788,7 @@ return (
             ) : null}
           </DragOverlay>
         </DndContext>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Importer noms + images + commentaires</CardTitle>
