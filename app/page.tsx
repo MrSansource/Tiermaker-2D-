@@ -1731,9 +1731,9 @@ return (
             Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
             Pour un lien public stable, déployez ce fichier sur Vercel.
           </p>
-        </div>
+        </DndContext>
       </div>
     </div>
-  </DndContext>
+  </div>
 );
 }
