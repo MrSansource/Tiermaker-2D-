@@ -565,13 +565,26 @@ export default function TierList2D() {
       // Si les deux sont null, va au pool
       if (vPos === null && hPos === null) {
         containers[POOL_ID].push(id);
-      } else {
-        // Convertir null en -1 (à classer)
-        const r = vPos === null ? -1 : vPos;
-        const c = hPos === null ? -1 : hPos;
+      } 
+      // Si un des deux est null (mais pas les deux), ou si l'un est -1, va dans "à classer"
+      else if (vPos === null || hPos === null || vPos === UNCLASSIFIED_INDEX || hPos === UNCLASSIFIED_INDEX) {
+        const r = vPos === null || vPos === UNCLASSIFIED_INDEX ? -1 : vPos;
+        const c = hPos === null || hPos === UNCLASSIFIED_INDEX ? -1 : hPos;
         const cid = `r${r}-c${c}`;
         if (!containers[cid]) containers[cid] = [];
         containers[cid].push(id);
+      }
+      // Sinon, les deux positions sont valides (>= 0), va dans la cellule normale
+      else {
+        // Vérifier que les positions sont dans les limites
+        if (vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
+          const cid = `r${vPos}-c${hPos}`;
+          if (!containers[cid]) containers[cid] = [];
+          containers[cid].push(id);
+        } else {
+          // Position invalide, renvoyer au pool
+          containers[POOL_ID].push(id);
+        }
       }
     }
     
