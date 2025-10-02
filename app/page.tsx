@@ -1288,10 +1288,452 @@ return (
         </Card>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
-          <div>TEST</div>
+          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
+            <div className="grid gap-2 p-2" style={gridTemplate}>
+              <div />
+              
+              <div
+                className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
+              >
+                À classer
+              </div>
+              {hAxis.tiers.map((tier, ci) => (
+                <div
+                  key={`colh-${ci}`}
+                  className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                  style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
+                >
+                  {tier.label}
+                </div>
+              ))}
+
+              <div
+                className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
+              >
+                À classer
+              </div>
+              
+              {(() => {
+                const id = `r-1-c-1`;
+                const items = state.containers[id] || [];
+                return (
+                  <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                    <CardContent className={cx("p-2", T.cardBg)}>
+                      <SortableContext items={items} strategy={rectSortingStrategy}>
+                        <Droppable
+                          id={id}
+                          onClick={() => {
+                            if (!selectedId) return;
+                            const currentContainer = getContainerByItem(selectedId);
+                            if (currentContainer === id) {
+                              setSelectedId(null);
+                              return;
+                            }
+                            moveToContainer(selectedId, id);
+                          }}
+                        >
+                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                            {items.map((itemId) => (
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                              />
+                            ))}
+                          </div>
+                        </Droppable>
+                      </SortableContext>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {hAxis.tiers.map((_, ci) => {
+                const id = `r-1-c${ci}`;
+                const items = state.containers[id] || [];
+                return (
+                  <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                    <CardContent className={cx("p-2", T.cardBg)}>
+                      <SortableContext items={items} strategy={rectSortingStrategy}>
+                        <Droppable
+                          id={id}
+                          onClick={() => {
+                            if (!selectedId) return;
+                            const currentContainer = getContainerByItem(selectedId);
+                            if (currentContainer === id) {
+                              setSelectedId(null);
+                              return;
+                            }
+                            moveToContainer(selectedId, id);
+                          }}
+                        >
+                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                            {items.map((itemId) => (
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                              />
+                            ))}
+                          </div>
+                        </Droppable>
+                      </SortableContext>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {vAxis.tiers.map((rowTier, ri) => (
+                <React.Fragment key={`row-${ri}`}>
+                  <div
+                    className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                    style={{ backgroundColor: rowTier.color, color: textColorForBg(rowTier.color) }}
+                  >
+                    {rowTier.label}
+                  </div>
+
+                  {(() => {
+                    const id = `r${ri}-c-1`;
+                    const items = state.containers[id] || [];
+                    return (
+                      <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                        <CardContent className={cx("p-2", T.cardBg)}>
+                          <SortableContext items={items} strategy={rectSortingStrategy}>
+                            <Droppable
+                              id={id}
+                              onClick={() => {
+                                if (!selectedId) return;
+                                const currentContainer = getContainerByItem(selectedId);
+                                if (currentContainer === id) {
+                                  setSelectedId(null);
+                                  return;
+                                }
+                                moveToContainer(selectedId, id);
+                              }}
+                            >
+                              <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                                {items.map((itemId) => (
+                                  <Tile
+                                    key={itemId}
+                                    id={itemId}
+                                    name={state.items[itemId]?.name ?? itemId}
+                                    image={state.items[itemId]?.image}
+                                    comment={state.items[itemId]?.comment}
+                                    tileSize={state.tileSize}
+                                    selected={selectedId === itemId}
+                                    highlighted={matchedIds.has(itemId)}
+                                    onClick={() => setSelectedId(itemId)}
+                                    isCommentOpen={openCommentId === itemId}
+                                    onCommentToggle={toggleCommentFor}
+                                  />
+                                ))}
+                              </div>
+                            </Droppable>
+                          </SortableContext>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
+                  {hAxis.tiers.map((_, ci) => {
+                    const id = `r${ri}-c${ci}`;
+                    const items = state.containers[id] || [];
+                    return (
+                      <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
+                        <CardContent className={cx("p-2", T.cardBg)}>
+                          <SortableContext items={items} strategy={rectSortingStrategy}>
+                            <Droppable
+                              id={id}
+                              onClick={() => {
+                                if (!selectedId) return;
+                                const currentContainer = getContainerByItem(selectedId);
+                                if (currentContainer === id) {
+                                  setSelectedId(null);
+                                  return;
+                                }
+                                moveToContainer(selectedId, id);
+                              }}
+                            >
+                              <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                                {items.map((itemId) => (
+                                  <Tile
+                                    key={itemId}
+                                    id={itemId}
+                                    name={state.items[itemId]?.name ?? itemId}
+                                    image={state.items[itemId]?.image}
+                                    comment={state.items[itemId]?.comment}
+                                    tileSize={state.tileSize}
+                                    selected={selectedId === itemId}
+                                    highlighted={matchedIds.has(itemId)}
+                                    onClick={() => setSelectedId(itemId)}
+                                    isCommentOpen={openCommentId === itemId}
+                                    onCommentToggle={toggleCommentFor}
+                                  />
+                                ))}
+                              </div>
+                            </Droppable>
+                          </SortableContext>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle>Bac (non classés)</CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                {partialCount > 0 && (
+                  <Button
+                    variant="outline"
+                    className={OUTLINE_DARK}
+                    size="sm"
+                    onClick={() => setShowPartialOnly(v => !v)}
+                  >
+                    <Filter className="w-4 h-4 mr-2" />
+                    {showPartialOnly ? `Tous (${poolIds.length})` : `Partiels (${partialCount})`}
+                  </Button>
+                )}
+                {showAlphaNav && (
+                  <>
+                    <button className={chipCls(poolAlpha === null)} onClick={() => setPoolAlpha(null)}>Tous</button>
+                    {ALPHA_BUCKETS.map((k) => (
+                      <button
+                        key={k}
+                        className={chipCls(poolAlpha === k)}
+                        onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
+                      >
+                        {k === "Autres" ? "Autres" : `${k[0]}–${k[1]}`}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className={T.cardBg}>
+              <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
+                <Droppable id={state.poolId}>
+                  <div
+                    data-pool-root="1"
+                    className="flex flex-wrap gap-2 p-2"
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
+                      if (!selectedId) return;
+                      const currentContainer = getContainerByItem(selectedId);
+                      if (currentContainer === state.poolId) {
+                        setSelectedId(null);
+                        return;
+                      }
+                      moveToContainer(selectedId, state.poolId);
+                    }}
+                  >
+                    {alphaFilteredPoolIds.map((itemId) => (
+                      <Tile
+                        key={itemId}
+                        id={itemId}
+                        name={state.items[itemId]?.name ?? itemId}
+                        image={state.items[itemId]?.image}
+                        comment={state.items[itemId]?.comment}
+                        tileSize={state.tileSize}
+                        selected={selectedId === itemId}
+                        highlighted={matchedIds.has(itemId)}
+                        onClick={() => setSelectedId(itemId)}
+                        isCommentOpen={openCommentId === itemId}
+                        onCommentToggle={toggleCommentFor}
+                      />
+                    ))}
+                  </div>
+                </Droppable>
+              </SortableContext>
+            </CardContent>
+          </Card>
+
+          {openCommentId && (
+            <div
+              data-comment-panel
+              ref={commentRef}
+              className="fixed z-50 right-4 top-24 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200">
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Commentaire</div>
+                  <div className="font-semibold truncate">
+                    {state.items[openCommentId]?.name ?? openCommentId}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isEditingComment ? (
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                      onClick={() => {
+                        setDraftComment(state.items[openCommentId]?.comment ?? "");
+                        setIsEditingComment(true);
+                      }}
+                    >
+                      Éditer
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                        onClick={() => {
+                          setIsEditingComment(false);
+                          setDraftComment("");
+                        }}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-sm rounded-md bg-amber-500 text-black hover:bg-amber-400"
+                        onClick={() => {
+                          if (!openCommentId) return;
+                          const value = draftComment.trim();
+                          setState((s) => {
+                            const items = { ...s.items };
+                            if (items[openCommentId]) {
+                              items[openCommentId] = {
+                                ...items[openCommentId],
+                                comment: value || undefined,
+                              };
+                            }
+                            return { ...s, items };
+                          });
+                          setIsEditingComment(false);
+                          setDraftComment("");
+                        }}
+                      >
+                        Enregistrer
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                    onClick={() => {
+                      if (!openCommentId) return;
+                      setState((s) => {
+                        const items = { ...s.items };
+                        if (items[openCommentId]) {
+                          items[openCommentId] = { ...items[openCommentId], comment: undefined };
+                        }
+                        return { ...s, items };
+                      });
+                      setIsEditingComment(false);
+                      setDraftComment("");
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 text-sm rounded-md border border-zinc-300 hover:bg-zinc-100"
+                    onClick={() => {
+                      setOpenCommentId(null);
+                      setIsEditingComment(false);
+                      setDraftComment("");
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="p-3 text-sm leading-relaxed">
+                {!isEditingComment ? (
+                  <div className="whitespace-pre-wrap">
+                    {state.items[openCommentId]?.comment || <span className="text-zinc-500">—</span>}
+                  </div>
+                ) : (
+                  <Textarea
+                    value={draftComment}
+                    onChange={(e) => setDraftComment(e.target.value)}
+                    rows={8}
+                    className="w-full"
+                    placeholder="Écris ton commentaire ici…"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          <DragOverlay>
+            {activeId ? (
+              <Tile
+                id={activeId}
+                name={state.items[activeId]?.name ?? ""}
+                image={state.items[activeId]?.image}
+                comment={state.items[activeId]?.comment}
+                tileSize={state.tileSize}
+                isCommentOpen={openCommentId === activeId}
+                onCommentToggle={toggleCommentFor}
+              />
+            ) : null}
+          </DragOverlay>
         </DndContext>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Importer noms + images + commentaires</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className={cx("text-sm", T.mutedText)}>
+              Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>,{" "}
+              <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>,{" "}
+              <code>Nom;URL;Commentaire</code>. L'image et le commentaire sont optionnels.
+            </p>
+            <Textarea
+              className={cx("w-full resize-y", INPUT_DARK)}
+              rows={6}
+              value={pairsText}
+              onChange={(e) => setPairsText(e.target.value)}
+              placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\nPNL | https://exemple.com/pnl.webp`}
+            />
+            <div className="flex gap-2">
+              <Button onClick={importPairs}>
+                <Upload className="w-4 h-4 mr-2" />
+                Ajouter au bac
+              </Button>
+              <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Vider la zone
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className={cx("text-xs", T.mutedText)}>
+          <p>
+            Persistance : l'état est sauvegardé dans votre navigateur et peut être encodé dans l'URL (bouton « Partager le lien »).
+            Pour un lien public stable, déployez ce fichier sur Vercel.
+          </p>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }
