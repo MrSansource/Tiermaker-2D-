@@ -1030,6 +1030,13 @@ export default function TierList2D() {
       return;
     }
     setState(prev => {
+          // DEBUG: Afficher les positions d'un item
+    const firstItemId = Object.keys(prev.items)[0];
+    if (firstItemId) {
+      console.log("Item:", firstItemId);
+      console.log("Positions:", prev.items[firstItemId].axisPositions);
+      console.log("Cherche vAxis:", newId, "hAxis:", prev.activeHorizontalAxisId);
+    }
       const vAxis = prev.axes.find(a => a.id === newId)!;
       const hAxis = prev.axes.find(a => a.id === prev.activeHorizontalAxisId)!;
       const containers = rebuildContainersForAxes(
