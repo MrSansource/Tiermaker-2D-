@@ -549,7 +549,7 @@ export default function TierList2D() {
   };
 
   // FONCTION CORRIGÉE : Rebuild des containers selon les axes actifs
-  function rebuildContainersForAxes(
+function rebuildContainersForAxes(
     items: Record<string, Item>,
     vAxisId: string,
     hAxisId: string,
@@ -562,29 +562,31 @@ export default function TierList2D() {
       const vPos = item.axisPositions[vAxisId];
       const hPos = item.axisPositions[hAxisId];
       
-      // Si les deux sont null, va au pool
+      // Si les deux sont null -> pool (jamais classé nulle part)
       if (vPos === null && hPos === null) {
         containers[POOL_ID].push(id);
-      } 
-      // Si un des deux est null (mais pas les deux), ou si l'un est -1, va dans "à classer"
-      else if (vPos === null || hPos === null || vPos === UNCLASSIFIED_INDEX || hPos === UNCLASSIFIED_INDEX) {
-        const r = vPos === null || vPos === UNCLASSIFIED_INDEX ? -1 : vPos;
-        const c = hPos === null || hPos === UNCLASSIFIED_INDEX ? -1 : hPos;
+      }
+      // Si les DEUX sont -1 -> pool (classé ailleurs, mais "à classer" sur les deux axes affichés)
+      else if (vPos === UNCLASSIFIED_INDEX && hPos === UNCLASSIFIED_INDEX) {
+        containers[POOL_ID].push(id);
+      }
+      // Si UN SEUL est -1 -> cellule "à classer" (colonne ou ligne)
+      else if (vPos === UNCLASSIFIED_INDEX || hPos === UNCLASSIFIED_INDEX) {
+        const r = vPos === UNCLASSIFIED_INDEX ? -1 : vPos;
+        const c = hPos === UNCLASSIFIED_INDEX ? -1 : hPos;
         const cid = `r${r}-c${c}`;
         if (!containers[cid]) containers[cid] = [];
         containers[cid].push(id);
       }
-      // Sinon, les deux positions sont valides (>= 0), va dans la cellule normale
+      // Sinon, les deux positions sont valides (>= 0) -> cellule normale
+      else if (vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
+        const cid = `r${vPos}-c${hPos}`;
+        if (!containers[cid]) containers[cid] = [];
+        containers[cid].push(id);
+      }
+      // Position invalide -> pool
       else {
-        // Vérifier que les positions sont dans les limites
-        if (vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
-          const cid = `r${vPos}-c${hPos}`;
-          if (!containers[cid]) containers[cid] = [];
-          containers[cid].push(id);
-        } else {
-          // Position invalide, renvoyer au pool
-          containers[POOL_ID].push(id);
-        }
+        containers[POOL_ID].push(id);
       }
     }
     
