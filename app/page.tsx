@@ -562,38 +562,49 @@ function rebuildContainersForAxes(
       const vPos = item.axisPositions[vAxisId];
       const hPos = item.axisPositions[hAxisId];
       
-      // Si les deux sont null -> pool (jamais classé nulle part)
+      // Cas 1: Jamais classé (null × null)
       if (vPos === null && hPos === null) {
         containers[POOL_ID].push(id);
+        continue;
       }
-      // Si les DEUX sont -1 -> pool (classé ailleurs, mais "à classer" sur les deux axes affichés)
-      else if (vPos === UNCLASSIFIED_INDEX && hPos === UNCLASSIFIED_INDEX) {
+      
+      // Cas 2: À classer sur les deux axes (-1 × -1)
+      if (vPos === -1 && hPos === -1) {
         containers[POOL_ID].push(id);
+        continue;
       }
-      // Si UN SEUL est -1 -> cellule "à classer" (colonne ou ligne)
-      else if (vPos === UNCLASSIFIED_INDEX || hPos === UNCLASSIFIED_INDEX) {
-        const r = vPos === UNCLASSIFIED_INDEX ? -1 : vPos;
-        const c = hPos === UNCLASSIFIED_INDEX ? -1 : hPos;
-        const cid = `r${r}-c${c}`;
-        if (!containers[cid]) containers[cid] = [];
+      
+      // Cas 3: À classer sur un seul axe
+      if (vPos === -1 && hPos !== null && hPos >= 0) {
+        const cid = `r-1-c${hPos}`;
+        containers[cid] = containers[cid] || [];
         containers[cid].push(id);
+        continue;
       }
-      // Sinon, les deux positions sont valides (>= 0) -> cellule normale
-      else if (vPos !== null && hPos !== null && vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
+      
+      if (hPos === -1 && vPos !== null && vPos >= 0) {
+        const cid = `r${vPos}-c-1`;
+        containers[cid] = containers[cid] || [];
+        containers[cid].push(id);
+        continue;
+      }
+      
+      // Cas 4: Position normale valide
+      if (vPos !== null && hPos !== null && vPos >= 0 && hPos >= 0 && vPos < vTiersCount && hPos < hTiersCount) {
         const cid = `r${vPos}-c${hPos}`;
-        if (!containers[cid]) containers[cid] = [];
+        containers[cid] = containers[cid] || [];
         containers[cid].push(id);
+        continue;
       }
-      // Position invalide -> pool
-      else {
-        containers[POOL_ID].push(id);
-      }
+      
+      // Sinon: au pool
+      containers[POOL_ID].push(id);
     }
     
     containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], items);
     return containers;
   }
-
+  
   function moveToContainer(itemId: string, containerId: string) {
     setState((prev) => {
       const next = { ...prev, containers: { ...prev.containers } };
