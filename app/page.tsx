@@ -579,7 +579,7 @@ function rebuildContainersForAxes(
         containers[cid].push(id);
       }
       // Sinon, les deux positions sont valides (>= 0) -> cellule normale
-      else if (vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
+      else if (vPos !== null && hPos !== null && vPos >= 0 && vPos < vTiersCount && hPos >= 0 && hPos < hTiersCount) {
         const cid = `r${vPos}-c${hPos}`;
         if (!containers[cid]) containers[cid] = [];
         containers[cid].push(id);
