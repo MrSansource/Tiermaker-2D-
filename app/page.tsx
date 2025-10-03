@@ -1090,7 +1090,7 @@ function rebuildContainersForAxes(
   const filteredPoolIds = showPartialOnly
     ? poolIds.filter(id => {
         const positions = state.items[id]?.axisPositions || {};
-        return Object.values(positions).some(v => v !== null);
+        return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
       })
     : poolIds;
 
@@ -1102,9 +1102,9 @@ function rebuildContainersForAxes(
 
   const partialCount = poolIds.filter(id => {
     const positions = state.items[id]?.axisPositions || {};
-    return Object.values(positions).some(v => v !== null);
+    return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
-
+  
  return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
