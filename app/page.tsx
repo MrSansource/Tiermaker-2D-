@@ -1874,22 +1874,22 @@ function rebuildContainersForAxes(
 
           <DragOverlay>
             {activeId ? (
-    <Tile
-      key={activeId}
-      id={activeId}
-      name={state.items[activeId]?.name ?? ""}
-      image={state.items[activeId]?.image}
-      comment={state.items[activeId]?.comment}
-      tileSize={state.tileSize}
-      isCommentOpen={openCommentId === activeId}
-      onCommentToggle={toggleCommentFor}
-      axisPositions={state.items[activeId]?.axisPositions}
-      axes={state.axes}
-      showInfo={showInfoId === activeId}
-      onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
-    />
-  ) : null}
-</DragOverlay>
+                              <Tile
+                                key={activeId}
+                                id={activeId}
+                                name={state.items[activeId]?.name ?? ""}
+                                image={state.items[activeId]?.image}
+                                comment={state.items[activeId]?.comment}
+                                tileSize={state.tileSize}
+                                isCommentOpen={openCommentId === activeId}
+                                onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[activeId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === activeId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
+                              />
+                             ) : null}
+                            </DragOverlay>
         </DndContext>
 
         <Card>
