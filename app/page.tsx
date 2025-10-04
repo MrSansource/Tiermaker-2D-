@@ -1140,7 +1140,7 @@ function rebuildContainersForAxes(
       })
     : poolIds;
 
-  const showAlphaNav = PoolIds.length > 1000;
+  const showAlphaNav = poolIds.length > 1000;
 
   const alphaFilteredPoolIds = poolAlpha
     ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
