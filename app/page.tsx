@@ -1115,6 +1115,9 @@ function rebuildContainersForAxes(
     const positions = state.items[id]?.axisPositions || {};
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
+
+  console.log("partialCount:", partialCount); // ← Cette ligne doit être là
+  console.log("poolIds length:", poolIds.length); // ← Et celle-ci aussi
   
  return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
