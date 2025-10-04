@@ -1042,7 +1042,7 @@ function rebuildContainersForAxes(
         return { ...a, tiers: newTiers, tierWidths: newWidths };
       });
       
-      // Reconstruire les containers si l'axe modifié est actif
+      // Reconstruit les containers si l'axe modifié est actif 
       if (axisId === prev.activeVerticalAxisId || axisId === prev.activeHorizontalAxisId) {
         const vAxis = newAxes.find(a => a.id === prev.activeVerticalAxisId)!;
         const hAxis = newAxes.find(a => a.id === prev.activeHorizontalAxisId)!;
