@@ -146,6 +146,8 @@ function cx(...cls: Array<string | false | null | undefined>) {
   return cls.filter(Boolean).join(" ");
 }
 
+const [showInfoId, setShowInfoId] = useState<string | null>(null);
+
 const DARK = {
   pageBg: "bg-zinc-950",
   pageText: "text-zinc-50",
@@ -195,10 +197,15 @@ function chipCls(active: boolean) {
 }
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, isCommentOpen, onCommentToggle,
+  axisPositions, axes, showInfo, onInfoToggle,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
   isCommentOpen?: boolean; onCommentToggle?: (id: string) => void;
+  axisPositions?: Record<string, number | null>;
+  axes?: AxisDefinition[];
+  showInfo?: boolean;
+  onInfoToggle?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -209,6 +216,8 @@ function Tile({
     height: tileSize,
     touchAction: "none",
   };
+
+  const hasPositions = axisPositions && Object.values(axisPositions).some(v => v !== null && v !== -1);
 
   return (
     <motion.div
@@ -242,6 +251,32 @@ function Tile({
         </>
       ) : (
         <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+      )}
+
+      {hasPositions && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
+          className="absolute top-1 left-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-blue-500/80 hover:bg-blue-600/80 transition border border-white/30"
+          title="Informations de classement"
+        >
+          <span className="text-xs font-bold text-white">i</span>
+        </button>
+      )}
+
+      {showInfo && hasPositions && axes && (
+        <div className="absolute top-8 left-1 bg-white text-zinc-900 rounded-lg shadow-xl p-2 text-xs z-50 min-w-[180px] border border-zinc-300">
+          <div className="font-semibold mb-1 border-b pb-1">Classement</div>
+          {axes.map(axis => {
+            const pos = axisPositions?.[axis.id];
+            if (pos === null || pos === -1) return null;
+            const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
+            return (
+              <div key={axis.id} className="py-0.5">
+                <span className="font-medium">{axis.label}:</span> {tierLabel}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {comment && (
@@ -1105,12 +1140,12 @@ function rebuildContainersForAxes(
       })
     : poolIds;
 
-  const showAlphaNav = filteredPoolIds.length > 1000;
+  const showAlphaNav = PoolIds.length > 1000;
 
   const alphaFilteredPoolIds = poolAlpha
     ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
     : filteredPoolIds;
-
+  
   const partialCount = poolIds.filter(id => {
     const positions = state.items[id]?.axisPositions || {};
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
@@ -1386,6 +1421,13 @@ function rebuildContainersForAxes(
                 Ajouter / ouvrir un commentaire
               </Button>
               <Button
+               variant="outline"
+               className={OUTLINE_DARK}
+               onClick={() => setShowInfoId(null)}
+              >
+               Masquer les infos
+              </Button>
+              <Button
                 variant="outline"
                 className={OUTLINE_DARK}
                 disabled={!selectedId || !state.items[selectedId]?.comment}
@@ -1476,6 +1518,10 @@ function rebuildContainersForAxes(
                                 onClick={() => setSelectedId(itemId)}
                                 isCommentOpen={openCommentId === itemId}
                                 onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
                               />
                             ))}
                           </div>
@@ -1519,6 +1565,10 @@ function rebuildContainersForAxes(
                                 onClick={() => setSelectedId(itemId)}
                                 isCommentOpen={openCommentId === itemId}
                                 onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
                               />
                             ))}
                           </div>
@@ -1559,18 +1609,22 @@ function rebuildContainersForAxes(
                             >
                               <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
                                 {items.map((itemId) => (
-                                  <Tile
-                                    key={itemId}
-                                    id={itemId}
-                                    name={state.items[itemId]?.name ?? itemId}
-                                    image={state.items[itemId]?.image}
-                                    comment={state.items[itemId]?.comment}
-                                    tileSize={state.tileSize}
-                                    selected={selectedId === itemId}
-                                    highlighted={matchedIds.has(itemId)}
-                                    onClick={() => setSelectedId(itemId)}
-                                    isCommentOpen={openCommentId === itemId}
-                                    onCommentToggle={toggleCommentFor}
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
                                   />
                                 ))}
                               </div>
@@ -1602,18 +1656,22 @@ function rebuildContainersForAxes(
                             >
                               <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
                                 {items.map((itemId) => (
-                                  <Tile
-                                    key={itemId}
-                                    id={itemId}
-                                    name={state.items[itemId]?.name ?? itemId}
-                                    image={state.items[itemId]?.image}
-                                    comment={state.items[itemId]?.comment}
-                                    tileSize={state.tileSize}
-                                    selected={selectedId === itemId}
-                                    highlighted={matchedIds.has(itemId)}
-                                    onClick={() => setSelectedId(itemId)}
-                                    isCommentOpen={openCommentId === itemId}
-                                    onCommentToggle={toggleCommentFor}
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
                                   />
                                 ))}
                               </div>
@@ -1677,18 +1735,22 @@ function rebuildContainersForAxes(
                     }}
                   >
                     {alphaFilteredPoolIds.map((itemId) => (
-                      <Tile
-                        key={itemId}
-                        id={itemId}
-                        name={state.items[itemId]?.name ?? itemId}
-                        image={state.items[itemId]?.image}
-                        comment={state.items[itemId]?.comment}
-                        tileSize={state.tileSize}
-                        selected={selectedId === itemId}
-                        highlighted={matchedIds.has(itemId)}
-                        onClick={() => setSelectedId(itemId)}
-                        isCommentOpen={openCommentId === itemId}
-                        onCommentToggle={toggleCommentFor}
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
                       />
                     ))}
                   </div>
@@ -1812,14 +1874,22 @@ function rebuildContainersForAxes(
 
           <DragOverlay>
             {activeId ? (
-              <Tile
-                id={activeId}
-                name={state.items[activeId]?.name ?? ""}
-                image={state.items[activeId]?.image}
-                comment={state.items[activeId]?.comment}
-                tileSize={state.tileSize}
-                isCommentOpen={openCommentId === activeId}
-                onCommentToggle={toggleCommentFor}
+                              <Tile
+                                key={itemId}
+                                id={itemId}
+                                name={state.items[itemId]?.name ?? itemId}
+                                image={state.items[itemId]?.image}
+                                comment={state.items[itemId]?.comment}
+                                tileSize={state.tileSize}
+                                selected={selectedId === itemId}
+                                highlighted={matchedIds.has(itemId)}
+                                onClick={() => setSelectedId(itemId)}
+                                isCommentOpen={openCommentId === itemId}
+                                onCommentToggle={toggleCommentFor}
+                                axisPositions={state.items[itemId]?.axisPositions}
+                                axes={state.axes}
+                                showInfo={showInfoId === itemId}
+                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
               />
             ) : null}
           </DragOverlay>
