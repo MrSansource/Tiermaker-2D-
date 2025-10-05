@@ -146,8 +146,6 @@ function cx(...cls: Array<string | false | null | undefined>) {
   return cls.filter(Boolean).join(" ");
 }
 
-const [showInfoId, setShowInfoId] = useState<string | null>(null);
-
 const DARK = {
   pageBg: "bg-zinc-950",
   pageText: "text-zinc-50",
@@ -496,6 +494,7 @@ export default function TierList2D() {
   const [poolAlpha, setPoolAlpha] = useState<AlphaKey | null>("AB");
   const [editingAxisId, setEditingAxisId] = useState<string | null>(null);
   const [showPartialOnly, setShowPartialOnly] = useState(false);
+  const [showInfoId, setShowInfoId] = useState<string | null>(null);
 
   const commentRef = useRef<HTMLDivElement | null>(null);
   const appRootRef = useRef<HTMLDivElement | null>(null);
