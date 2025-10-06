@@ -254,7 +254,7 @@ function Tile({
       {hasPositions && (
         <button
           onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
-          className="absolute top-8 left-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-blue-500/80 hover:bg-black/40 transition border border-white/30"
+          className="absolute top-8 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
           title="Informations de classement"
         >
           <span className="text-xs font-bold text-white">i</span>
