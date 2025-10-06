@@ -263,12 +263,8 @@ function Tile({
 
             {showInfo && hasPositions && axes && (
               <div
-                className="fixed bg-white text-zinc-900 rounded-lg shadow-xl p-3 text-sm z-50 min-w-[200px] border border-zinc-300"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
+                data-info-panel="1"
+                className="absolute left-full top-0 ml-2 bg-white text-zinc-900 rounded-lg shadow-xl p-3 text-sm z-50 min-w-[200px] border border-zinc-300"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="font-semibold mb-2 border-b pb-1 text-base">{name}</div>
@@ -284,12 +280,6 @@ function Tile({
                     );
                   })}
                 </div>
-                <button
-                  className="mt-3 w-full px-3 py-1 text-xs rounded-md border border-zinc-300 hover:bg-zinc-100"
-                  onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
-                >
-                  Fermer
-                </button>
               </div>
             )}
 
@@ -511,7 +501,7 @@ export default function TierList2D() {
   const [editingAxisId, setEditingAxisId] = useState<string | null>(null);
   const [showPartialOnly, setShowPartialOnly] = useState(false);
   const [showInfoId, setShowInfoId] = useState<string | null>(null);
-
+  const [commentPanelPosition, setCommentPanelPosition] = useState({ x: 0, y: 0 });
   const commentRef = useRef<HTMLDivElement | null>(null);
   const appRootRef = useRef<HTMLDivElement | null>(null);
 
@@ -544,13 +534,14 @@ export default function TierList2D() {
     function handleGlobalClick(ev: MouseEvent) {
       const t = ev.target as HTMLElement | null;
       if (!t) return;
-      const clickedUseful = t.closest("[data-item-id]") || t.closest("[data-cell-id]") ||
+      const clickedUseful = t.closest("[data-item-id]")
         t.closest("[data-pool-root]") || t.closest("[data-comment-panel]") ||
         t.closest("button,[role='button'],input,textarea,select,a,[contenteditable='true']");
       if (clickedUseful) return;
       setOpenCommentId(null);
       setIsEditingComment(false);
       setSelectedId(null);
+      setShowInfoId(null);
     }
     document.addEventListener("click", handleGlobalClick, true);
     return () => document.removeEventListener("click", handleGlobalClick, true);
@@ -577,6 +568,15 @@ export default function TierList2D() {
       if (seed) loadSeed(seed);
     } catch {}
   }, []);
+
+  useEffect(() => {
+  if (!openCommentId) return;
+  const tile = document.querySelector(`[data-item-id="${openCommentId}"]`);
+  if (tile) {
+    const rect = tile.getBoundingClientRect();
+    setCommentPanelPosition({ x: rect.left, y: rect.top });
+  }
+}, [openCommentId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -714,6 +714,7 @@ function rebuildContainersForAxes(
       setIsEditingComment(false);
       return;
     }
+    setShowInfoId(null);
     setOpenCommentId(id);
     setSelectedId(null);
     const hasComment = state.items[id]?.comment?.trim();
@@ -1536,8 +1537,12 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === itemId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
-                              />
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
+                                  />
                             ))}
                           </div>
                         </Droppable>
@@ -1583,8 +1588,12 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === itemId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
-                              />
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
+                                  />
                             ))}
                           </div>
                         </Droppable>
@@ -1639,7 +1648,11 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === itemId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
                                   />
                                 ))}
                               </div>
@@ -1686,7 +1699,11 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === itemId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
                                   />
                                 ))}
                               </div>
@@ -1765,8 +1782,12 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === itemId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
-                      />
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
+                                  />
                     ))}
                   </div>
                 </Droppable>
@@ -1776,9 +1797,13 @@ function rebuildContainersForAxes(
 
           {openCommentId && (
             <div
-              data-comment-panel
+              data-comment-panel="1"
               ref={commentRef}
-              className="fixed z-50 right-4 top-24 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
+              className="fixed z-50 w-[min(520px,calc(100vw-2rem))] rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-2xl"
+              style={{
+                left: `${commentPanelPosition.x}px`,
+                top: `${commentPanelPosition.y}px`,
+              }}
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
@@ -1901,8 +1926,12 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[activeId]?.axisPositions}
                                 axes={state.axes}
                                 showInfo={showInfoId === activeId}
-                                onInfoToggle={(id) => setShowInfoId(prev => prev === id ? null : id)}
-                              />
+                                onInfoToggle={(id) => {
+                                  setOpenCommentId(null);
+                                  setIsEditingComment(false);
+                                  setShowInfoId(prev => prev === id ? null : id);
+                                }}
+                                  />
                              ) : null}
                             </DragOverlay>
         </DndContext>
