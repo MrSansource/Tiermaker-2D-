@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Edit, Filter } from "lucide-react";
 
-type Tier = { label: string; color: string };
+type Tier = { label: string; color: string; hidden?: boolean; };
 
 type AxisDefinition = {
   id: string;
@@ -1368,6 +1368,14 @@ function rebuildContainersForAxes(
                                 onChange={(e) => updateTier(axis.id, i, { color: e.target.value })}
                                 className="h-10 w-12 rounded cursor-pointer border"
                               />
+                              <label className="flex items-center gap-1 text-xs whitespace-nowrap">
+                                <input
+                                  type="checkbox"
+                                  checked={!tier.hidden}
+                                  onChange={(e) => updateTier(axis.id, i, { hidden: !e.target.checked })}
+                                />
+                                Visible
+                              </label>
                               <div
                                 className="px-3 py-2 rounded-md text-xs font-semibold"
                                 style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
@@ -1484,7 +1492,7 @@ function rebuildContainersForAxes(
               >
                 À classer
               </div>
-              {hAxis.tiers.map((tier, ci) => (
+              {hAxis.tiers.filter(t => !t.hidden).map((tier, ci) => (
                 <div
                   key={`colh-${ci}`}
                   className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
@@ -1552,7 +1560,7 @@ function rebuildContainersForAxes(
                 );
               })()}
 
-              {hAxis.tiers.map((_, ci) => {
+              {hAxis.tiers.filter(t => !t.hidden).map((_, ci) => { 
                 const id = `r-1-c${ci}`;
                 const items = state.containers[id] || [];
                 return (
@@ -1603,8 +1611,8 @@ function rebuildContainersForAxes(
                 );
               })}
 
-              {vAxis.tiers.map((rowTier, ri) => (
-                <React.Fragment key={`row-${ri}`}>
+              {vAxis.tiers.filter(t => !t.hidden).map((rowTier, ri) => (
+               <React.Fragment key={`row-${ri}`}>
                   <div
                     className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                     style={{ backgroundColor: rowTier.color, color: textColorForBg(rowTier.color) }}
@@ -1663,7 +1671,7 @@ function rebuildContainersForAxes(
                     );
                   })()}
 
-                  {hAxis.tiers.map((_, ci) => {
+                  {hAxis.tiers.filter(t => !t.hidden).map((_, ci) => {
                     const id = `r${ri}-c${ci}`;
                     const items = state.containers[id] || [];
                     return (
