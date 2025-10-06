@@ -254,28 +254,44 @@ function Tile({
       {hasPositions && (
         <button
           onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
-          className="absolute top-1 left-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-blue-500/80 hover:bg-blue-600/80 transition border border-white/30"
+          className="absolute top-8 left-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-blue-500/80 hover:bg-black/40 transition border border-white/30"
           title="Informations de classement"
         >
           <span className="text-xs font-bold text-white">i</span>
         </button>
       )}
 
-      {showInfo && hasPositions && axes && (
-        <div className="absolute top-8 left-1 bg-white text-zinc-900 rounded-lg shadow-xl p-2 text-xs z-50 min-w-[180px] border border-zinc-300">
-          <div className="font-semibold mb-1 border-b pb-1">Classement</div>
-          {axes.map(axis => {
-            const pos = axisPositions?.[axis.id];
-            if (pos === null || pos === -1) return null;
-            const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
-            return (
-              <div key={axis.id} className="py-0.5">
-                <span className="font-medium">{axis.label}:</span> {tierLabel}
+            {showInfo && hasPositions && axes && (
+              <div
+                className="fixed bg-white text-zinc-900 rounded-lg shadow-xl p-3 text-sm z-50 min-w-[200px] border border-zinc-300"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="font-semibold mb-2 border-b pb-1 text-base">{name}</div>
+                <div className="space-y-1">
+                  {axes.map(axis => {
+                    const pos = axisPositions?.[axis.id];
+                    if (pos === null || pos === -1) return null;
+                    const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
+                    return (
+                      <div key={axis.id} className="py-1">
+                        <span className="font-medium">{axis.label} :</span> {tierLabel}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  className="mt-3 w-full px-3 py-1 text-xs rounded-md border border-zinc-300 hover:bg-zinc-100"
+                  onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
+                >
+                  Fermer
+                </button>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
 
       {comment && (
         <button
