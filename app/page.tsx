@@ -194,8 +194,8 @@ function chipCls(active: boolean) {
   ].join(" ");
 }
 function Tile({
-  id, name, image, comment, tileSize, selected, highlighted, onClick, isCommentOpen, onCommentToggle,
-  axisPositions, axes, showInfo, onInfoToggle,
+  id, name, image, comment, tileSize, selected, highlighted, onClick, 
+  isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -223,8 +223,14 @@ function Tile({
       style={style}
       layout
       data-item-id={id}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      onMouseDown={(e) => e.stopPropagation()} // Important : ne pas interférer avec le drag
+      onClick={(e) => { 
+        e.stopPropagation();
+        // AJOUT : vérifier qu'on ne clique pas sur un bouton
+        const target = e.target as HTMLElement;
+        if (target.closest('button')) return; // Ne pas déclencher onClick si on clique sur un bouton
+        onClick?.(); 
+      }}
       className={cx(
         "relative overflow-hidden select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
         "bg-zinc-900 border-zinc-700 text-zinc-100",
@@ -600,60 +606,62 @@ export default function TierList2D() {
 
   // FONCTION CORRIGÉE : Rebuild des containers selon les axes actifs
 function rebuildContainersForAxes(
-    items: Record<string, Item>,
-    vAxisId: string,
-    hAxisId: string,
-    vTiersCount: number,
-    hTiersCount: number
-  ) {
-    const containers = makeEmptyContainers(vTiersCount, hTiersCount);
+  items: Record<string, Item>,
+  vAxisId: string,
+  hAxisId: string,
+  vTiersCount: number,
+  hTiersCount: number
+) {
+  const containers = makeEmptyContainers(vTiersCount, hTiersCount);
+  
+  for (const [id, item] of Object.entries(items)) {
+    const vPos = item.axisPositions[vAxisId];
+    const hPos = item.axisPositions[hAxisId];
     
-    for (const [id, item] of Object.entries(items)) {
-      const vPos = item.axisPositions[vAxisId];
-      const hPos = item.axisPositions[hAxisId];
-      
-      // Cas 1: Jamais classé (null × null)
-      if (vPos === null && hPos === null) {
-        containers[POOL_ID].push(id);
-        continue;
-      }
-      
-      // Cas 2: À classer sur les deux axes (-1 × -1)
-      if (vPos === -1 && hPos === -1) {
-        containers[POOL_ID].push(id);
-        continue;
-      }
-      
-      // Cas 3: À classer sur un seul axe
-      if (vPos === -1 && hPos !== null && hPos >= 0) {
-        const cid = `r-1-c${hPos}`;
-        containers[cid] = containers[cid] || [];
-        containers[cid].push(id);
-        continue;
-      }
-      
-      if (hPos === -1 && vPos !== null && vPos >= 0) {
-        const cid = `r${vPos}-c-1`;
-        containers[cid] = containers[cid] || [];
-        containers[cid].push(id);
-        continue;
-      }
-      
-      // Cas 4: Position normale valide
-      if (vPos !== null && hPos !== null && vPos >= 0 && hPos >= 0 && vPos < vTiersCount && hPos < hTiersCount) {
-        const cid = `r${vPos}-c${hPos}`;
-        containers[cid] = containers[cid] || [];
-        containers[cid].push(id);
-        continue;
-      }
-      
-      // Sinon: au pool
+    // Cas 1: Jamais classé sur aucun axe (null × null)
+    if (vPos === null && hPos === null) {
       containers[POOL_ID].push(id);
+      continue;
     }
     
-    containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], items);
-    return containers;
+    // Cas 2: À classer sur les deux axes affichés (-1 × -1)
+    if (vPos === -1 && hPos === -1) {
+      containers[POOL_ID].push(id);
+      continue;
+    }
+    
+    // Cas 3a: Classé horizontal, à classer vertical (null ou -1 sur v, >= 0 sur h)
+    if ((vPos === null || vPos === -1) && hPos !== null && hPos >= 0 && hPos < hTiersCount) {
+      const cid = `r-1-c${hPos}`;
+      containers[cid] = containers[cid] || [];
+      containers[cid].push(id);
+      continue;
+    }
+    
+    // Cas 3b: Classé vertical, à classer horizontal (>= 0 sur v, null ou -1 sur h)
+    if (vPos !== null && vPos >= 0 && vPos < vTiersCount && (hPos === null || hPos === -1)) {
+      const cid = `r${vPos}-c-1`;
+      containers[cid] = containers[cid] || [];
+      containers[cid].push(id);
+      continue;
+    }
+    
+    // Cas 4: Position valide sur les deux axes
+    if (vPos !== null && hPos !== null && vPos >= 0 && hPos >= 0 && 
+        vPos < vTiersCount && hPos < hTiersCount) {
+      const cid = `r${vPos}-c${hPos}`;
+      containers[cid] = containers[cid] || [];
+      containers[cid].push(id);
+      continue;
+    }
+    
+    // Cas 5: Position invalide ou hors limites → au pool
+    containers[POOL_ID].push(id);
   }
+  
+  containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID], items);
+  return containers;
+}
   
   function moveToContainer(itemId: string, containerId: string) {
     setState((prev) => {
