@@ -308,7 +308,12 @@ function Droppable({ id, children, onClick }: { id: string; children: React.Reac
     <div
       ref={setNodeRef}
       data-droppable-id={id}
-      onClick={onClick}
+      onClick={(e) => {
+        // AJOUT : ne déclencher que si on clique sur le fond, pas sur une tuile
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-item-id]')) return;
+        onClick?.();
+      }}
       className={cx("min-h-[120px] rounded-md", isOver && "ring-2 ring-indigo-500/60", DARK.cardBg)}
       style={{ touchAction: "none" }}
     >
