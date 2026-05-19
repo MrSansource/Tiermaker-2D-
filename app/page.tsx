@@ -118,12 +118,12 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: Array<{ name: string; image?: string; comment?: string }> = [];
   for (const line of lines) {
-    const m = line.match(/https?:\/\/\S+/);
+    const m = line.match(/https?:\/\/[^\s|;,]+/);
     if (m) {
-      const url = m[0];
+      const url = m[0].replace(/[)\].,;]+$/, "");
       const before = line.slice(0, m.index as number).trim();
       const name = before.split(/[|;,\t]/).join(" ").replace(/\s{2,}/g, " ").trim();
-      const after = line.slice((m.index as number) + url.length);
+      const after = line.slice((m.index as number) + m[0].length);
       let cleaned = after.trim();
       while (cleaned.startsWith("|") || cleaned.startsWith(",") || cleaned.startsWith(";") || 
              cleaned.startsWith(":") || cleaned.startsWith("-") || cleaned.startsWith("–") || cleaned.startsWith("—")) {
@@ -506,7 +506,7 @@ export default function TierList2D() {
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [draftComment, setDraftComment] = useState("");
-  const [poolAlpha, setPoolAlpha] = useState<AlphaKey | null>("AB");
+  const [poolAlpha, setPoolAlpha] = useState<AlphaKey | null>(null);
   const [editingAxisId, setEditingAxisId] = useState<string | null>(null);
   const [showPartialOnly, setShowPartialOnly] = useState(false);
   const [showInfoId, setShowInfoId] = useState<string | null>(null);
@@ -1179,7 +1179,7 @@ function rebuildContainersForAxes(
 
   const showAlphaNav = poolIds.length > 1000;
 
-  const alphaFilteredPoolIds = poolAlpha
+  const alphaFilteredPoolIds = showAlphaNav && poolAlpha
     ? filteredPoolIds.filter((id) => bucketForName(state.items[id]?.name || id) === poolAlpha)
     : filteredPoolIds;
   
