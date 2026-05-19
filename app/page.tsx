@@ -4,8 +4,6 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  MouseSensor,
-  TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
@@ -517,13 +515,17 @@ export default function TierList2D() {
   const appRootRef = useRef<HTMLDivElement | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
-    useSensor(MouseSensor),
-    useSensor(TouchSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
   const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId) || state.axes[0];
   const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId) || state.axes[1] || state.axes[0];
+  const visibleVTiers = vAxis.tiers
+    .map((tier, index) => ({ tier, index }))
+    .filter(({ tier }) => !tier.hidden);
+  const visibleHTiers = hAxis.tiers
+    .map((tier, index) => ({ tier, index }))
+    .filter(({ tier }) => !tier.hidden);
 
   const matchedIds = useMemo(() => {
     const q = normalizeText(search);
@@ -604,10 +606,77 @@ export default function TierList2D() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId]);
 
-  const getContainerByItem = (itemId: string) => {
-    for (const [cid, arr] of Object.entries(state.containers)) if (arr.includes(itemId)) return cid;
+  const getContainerByItem = (
+    itemId: string,
+    containers: Record<string, string[]> = state.containers
+  ) => {
+    for (const [cid, arr] of Object.entries(containers)) if (arr.includes(itemId)) return cid;
     return null;
   };
+
+  const getContainerFromOverId = (overId: string, containers: Record<string, string[]>) => {
+    if (overId === POOL_ID || /^r-?\d+-c-?\d+$/.test(overId)) return overId;
+    return getContainerByItem(overId, containers);
+  };
+
+  function updateItemAxisPositionsForContainer(prev: AppState, item: Item, containerId: string) {
+    const axisPositions = { ...item.axisPositions };
+
+    if (containerId === prev.poolId) {
+      axisPositions[prev.activeVerticalAxisId] = null;
+      axisPositions[prev.activeHorizontalAxisId] = null;
+      return axisPositions;
+    }
+
+    const match = containerId.match(/^r(-?\d+)-c(-?\d+)$/);
+    if (!match) return axisPositions;
+
+    const r = parseInt(match[1], 10);
+    const c = parseInt(match[2], 10);
+    const wasFullyUnclassified = Object.values(axisPositions).every(v => v === null);
+
+    axisPositions[prev.activeVerticalAxisId] = r;
+    axisPositions[prev.activeHorizontalAxisId] = c;
+
+    if (wasFullyUnclassified) {
+      for (const axis of prev.axes) {
+        if (axis.id !== prev.activeVerticalAxisId && axis.id !== prev.activeHorizontalAxisId) {
+          axisPositions[axis.id] = UNCLASSIFIED_INDEX;
+        }
+      }
+    }
+
+    return axisPositions;
+  }
+
+  function moveItemInState(prev: AppState, itemId: string, containerId: string, beforeId?: string | null): AppState {
+    const from = getContainerByItem(itemId, prev.containers);
+    if (!from || !prev.items[itemId]) return prev;
+
+    const containers = { ...prev.containers };
+    const sourceItems = [...(containers[from] || [])].filter(id => id !== itemId);
+    const destBase = from === containerId
+      ? sourceItems
+      : [...(containers[containerId] || [])].filter(id => id !== itemId);
+
+    const insertAt = beforeId && beforeId !== itemId ? destBase.indexOf(beforeId) : -1;
+    const destItems = [...destBase];
+    if (insertAt >= 0) destItems.splice(insertAt, 0, itemId);
+    else destItems.push(itemId);
+
+    containers[from] = sourceItems;
+    containers[containerId] = containerId === prev.poolId
+      ? sortIdsAlpha(destItems, prev.items)
+      : destItems;
+
+    const items = { ...prev.items };
+    items[itemId] = {
+      ...items[itemId],
+      axisPositions: updateItemAxisPositionsForContainer(prev, items[itemId], containerId),
+    };
+
+    return { ...prev, containers, items };
+  }
 
   // FONCTION CORRIGÉE : Rebuild des containers selon les axes actifs
 function rebuildContainersForAxes(
@@ -669,58 +738,8 @@ function rebuildContainersForAxes(
 }
   
   function moveToContainer(itemId: string, containerId: string) {
-    setState((prev) => {
-      const next = { ...prev, containers: { ...prev.containers } };
-      const from = getContainerByItem(itemId);
-      if (!from) return prev;
-      
-      const src = [...next.containers[from]];
-      const idx = src.indexOf(itemId);
-      if (idx > -1) src.splice(idx, 1);
-      next.containers[from] = src;
-      
-      if (!next.containers[containerId]) next.containers[containerId] = [];
-      next.containers[containerId] = containerId === next.poolId
-        ? sortIdsAlpha([...next.containers[containerId], itemId], next.items)
-        : [...next.containers[containerId], itemId];
-
-      const items = { ...next.items };
-      if (items[itemId]) {
-        const axisPositions = { ...items[itemId].axisPositions };
-        
-        if (containerId !== next.poolId) {
-          const match = containerId.match(/^r(-?\d+)-c(-?\d+)$/);
-          if (match) {
-            const r = parseInt(match[1]);
-            const c = parseInt(match[2]);
-            
-            const wasFullyUnclassified = Object.values(axisPositions).every(v => v === null);
-            
-            axisPositions[next.activeVerticalAxisId] = r;
-            axisPositions[next.activeHorizontalAxisId] = c;
-            
-            // Si c'était totalement non classé, mettre tous les autres axes à -1
-            if (wasFullyUnclassified) {
-              for (const axis of next.axes) {
-                if (axis.id !== next.activeVerticalAxisId && axis.id !== next.activeHorizontalAxisId) {
-                  axisPositions[axis.id] = UNCLASSIFIED_INDEX;
-                }
-              }
-            }
-          }
-        } else {
-          // Retour au pool : remettre les positions des axes actifs à null
-          axisPositions[next.activeVerticalAxisId] = null;
-          axisPositions[next.activeHorizontalAxisId] = null;
-        }
-        
-        items[itemId] = { ...items[itemId], axisPositions };
-      }
-      
-      return { ...next, items };
-    });
+    setState((prev) => moveItemInState(prev, itemId, containerId));
   }
-
   function toggleCommentFor(id: string) {
     if (openCommentId === id) {
       setOpenCommentId(null);
@@ -765,22 +784,12 @@ function rebuildContainersForAxes(
     if (!over) return;
     const activeId = active.id as string;
     const overId = over.id as string;
-    const sourceContainer = getContainerByItem(activeId);
-    const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
-    if (!sourceContainer || !destContainer || sourceContainer === destContainer) return;
-
     setState((prev) => {
-      const next = { ...prev, containers: { ...prev.containers } };
-      const sourceItems = [...(next.containers[sourceContainer] || [])];
-      const destItems = [...(next.containers[destContainer] || [])];
-      const idx = sourceItems.indexOf(activeId);
-      if (idx > -1) sourceItems.splice(idx, 1);
-      destItems.push(activeId);
-      next.containers[sourceContainer] = sourceItems;
-      next.containers[destContainer] = destContainer === next.poolId
-        ? sortIdsAlpha(destItems, next.items)
-        : destItems;
-      return next;
+      const sourceContainer = getContainerByItem(activeId, prev.containers);
+      const destContainer = getContainerFromOverId(overId, prev.containers);
+      if (!sourceContainer || !destContainer || sourceContainer === destContainer) return prev;
+      const beforeId = overId === destContainer || overId === prev.poolId ? null : overId;
+      return moveItemInState(prev, activeId, destContainer, beforeId);
     });
   }
 
@@ -790,11 +799,16 @@ function rebuildContainersForAxes(
     if (!over) return;
     const activeId = active.id as string;
     const overId = over.id as string;
-    const sourceContainer = getContainerByItem(activeId);
-    const destContainer = overId.startsWith("r") || overId === POOL_ID ? overId : getContainerByItem(overId);
-    if (!sourceContainer || !destContainer) return;
-    if (sourceContainer === destContainer) {
-      setState((prev) => {
+    setState((prev) => {
+      const sourceContainer = getContainerByItem(activeId, prev.containers);
+      const destContainer = getContainerFromOverId(overId, prev.containers);
+      if (!sourceContainer || !destContainer) return prev;
+
+      if (sourceContainer !== destContainer) {
+        const beforeId = overId === destContainer || overId === prev.poolId ? null : overId;
+        return moveItemInState(prev, activeId, destContainer, beforeId);
+      }
+
         if (sourceContainer === prev.poolId) {
           const sorted = sortIdsAlpha([...prev.containers[sourceContainer]], prev.items);
           return { ...prev, containers: { ...prev.containers, [sourceContainer]: sorted } };
@@ -803,9 +817,9 @@ function rebuildContainersForAxes(
         const oldIndex = items.indexOf(activeId);
         let newIndex = items.indexOf(overId);
         if (newIndex === -1) newIndex = oldIndex;
+        if (oldIndex === -1 || oldIndex === newIndex) return prev;
         return { ...prev, containers: { ...prev.containers, [sourceContainer]: arrayMove(items, oldIndex, newIndex) } };
-      });
-    }
+    });
   }
   function resetAll() {
     setState(stateFromNames([]));
@@ -1107,13 +1121,6 @@ function rebuildContainersForAxes(
       return;
     }
     setState(prev => {
-          // DEBUG: Afficher les positions d'un item
-    const firstItemId = Object.keys(prev.items)[0];
-    if (firstItemId) {
-      console.log("Item:", firstItemId);
-      console.log("Positions:", prev.items[firstItemId].axisPositions);
-      console.log("Cherche vAxis:", newId, "hAxis:", prev.activeHorizontalAxisId);
-    }
       const vAxis = prev.axes.find(a => a.id === newId)!;
       const hAxis = prev.axes.find(a => a.id === prev.activeHorizontalAxisId)!;
       const containers = rebuildContainersForAxes(
@@ -1152,8 +1159,8 @@ function rebuildContainersForAxes(
   const vUnclassifiedSize = vAxis.unclassifiedSize || 150;
   const hUnclassifiedSize = hAxis.unclassifiedSize || 150;
 
-  const colsPx = (hAxis.tierWidths || Array(hAxis.tiers.length).fill(220))
-    .map(w => `${w}px`)
+  const colsPx = visibleHTiers
+    .map(({ index }) => `${(hAxis.tierWidths || [])[index] || 220}px`)
     .join(" ");
 
   const gridTemplate: React.CSSProperties = {
@@ -1180,9 +1187,6 @@ function rebuildContainersForAxes(
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
 
-  console.log("partialCount:", partialCount); // ← Cette ligne doit être là
-  console.log("poolIds length:", poolIds.length); // ← Et celle-ci aussi
-  
  return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
@@ -1194,20 +1198,31 @@ function rebuildContainersForAxes(
               onClick={() => {
                 const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId)!;
                 const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId)!;
+                const items = Object.fromEntries(
+                  Object.entries(state.items).map(([id, item]) => [
+                    id,
+                    {
+                      ...item,
+                      axisPositions: Object.fromEntries(
+                        state.axes.map(axis => [axis.id, null])
+                      ) as Record<string, number | null>,
+                    },
+                  ])
+                );
                 const containers = rebuildContainersForAxes(
-                  state.items,
+                  items,
                   state.activeVerticalAxisId,
                   state.activeHorizontalAxisId,
                   vAxis.tiers.length,
                   hAxis.tiers.length
                 );
                 // Remettre tous les items au pool
-                const allIds = Object.keys(state.items);
-                containers[state.poolId] = sortIdsAlpha(allIds, state.items);
+                const allIds = Object.keys(items);
+                containers[state.poolId] = sortIdsAlpha(allIds, items);
                 for (const key in containers) {
                   if (key !== state.poolId) containers[key] = [];
                 }
-                setState(s => ({ ...s, containers }));
+                setState(s => ({ ...s, items, containers }));
               }}
               title="Tout renvoyer en bas"
             >
@@ -1505,9 +1520,9 @@ function rebuildContainersForAxes(
               >
                 À classer
               </div>
-              {hAxis.tiers.filter(t => !t.hidden).map((tier, ci) => (
+              {visibleHTiers.map(({ tier, index }) => (
                 <div
-                  key={`colh-${ci}`}
+                  key={`colh-${index}`}
                   className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                   style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
                 >
@@ -1573,8 +1588,8 @@ function rebuildContainersForAxes(
                 );
               })()}
 
-              {hAxis.tiers.filter(t => !t.hidden).map((_, ci) => { 
-                const id = `r-1-c${ci}`;
+              {visibleHTiers.map(({ index }) => {
+                const id = `r-1-c${index}`;
                 const items = state.containers[id] || [];
                 return (
                   <Card key={id} className={cx("w-full h-full border", T.cardBorder)}>
@@ -1624,7 +1639,7 @@ function rebuildContainersForAxes(
                 );
               })}
 
-              {vAxis.tiers.filter(t => !t.hidden).map((rowTier, ri) => (
+              {visibleVTiers.map(({ tier: rowTier, index: ri }) => (
                <React.Fragment key={`row-${ri}`}>
                   <div
                     className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
@@ -1684,7 +1699,7 @@ function rebuildContainersForAxes(
                     );
                   })()}
 
-                  {hAxis.tiers.filter(t => !t.hidden).map((_, ci) => {
+                  {visibleHTiers.map(({ index: ci }) => {
                     const id = `r${ri}-c${ci}`;
                     const items = state.containers[id] || [];
                     return (
