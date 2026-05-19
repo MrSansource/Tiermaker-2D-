@@ -547,7 +547,8 @@ export default function TierList2D() {
     function handleGlobalClick(ev: MouseEvent) {
       const t = ev.target as HTMLElement | null;
       if (!t) return;
-      const clickedUseful = t.closest("[data-item-id]")
+      const clickedUseful = t.closest("[data-item-id]") ||
+        t.closest("[data-droppable-id]") || t.closest("[data-cell-id]") ||
         t.closest("[data-pool-root]") || t.closest("[data-comment-panel]") ||
         t.closest("button,[role='button'],input,textarea,select,a,[contenteditable='true']");
       if (clickedUseful) return;
