@@ -39,6 +39,8 @@ type Item = {
 };
 
 type AppState = {
+  categorySlug: string;
+  categoryLabel: string;
   axes: AxisDefinition[];
   activeVerticalAxisId: string;
   activeHorizontalAxisId: string;
@@ -49,8 +51,17 @@ type AppState = {
   forceDark: boolean;
 };
 
+type SeedSummary = {
+  id: string;
+  categorySlug: string;
+  uploadedAt?: string;
+  url?: string;
+};
+
 const POOL_ID = "__pool__";
 const UNCLASSIFIED_INDEX = -1;
+const DEFAULT_CATEGORY_LABEL = "Rap français";
+const DEFAULT_CATEGORY_SLUG = "rap-francais";
 
 const DEFAULT_ROWS: Tier[] = [
   { label: "GOATS", color: "#f59e0b" },
@@ -87,6 +98,36 @@ const slug = (s: string): string => {
     return s.toLowerCase().trim().replace(NON_ALNUM_RE, "-").replace(EDGE_DASH_RE, "");
   }
 };
+
+function categorySlugFromLabel(label: string) {
+  return slug(label) || DEFAULT_CATEGORY_SLUG;
+}
+
+function labelFromCategorySlug(value: string) {
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || DEFAULT_CATEGORY_LABEL;
+}
+
+function withCategory(state: AppState, label: string): AppState {
+  const cleanLabel = label.trim() || DEFAULT_CATEGORY_LABEL;
+  return {
+    ...state,
+    categoryLabel: cleanLabel,
+    categorySlug: categorySlugFromLabel(cleanLabel),
+  };
+}
+
+function normalizeStateCategory(state: AppState): AppState {
+  const label = state.categoryLabel || DEFAULT_CATEGORY_LABEL;
+  return {
+    ...state,
+    categoryLabel: label,
+    categorySlug: state.categorySlug || categorySlugFromLabel(label),
+  };
+}
 
 function normalizeText(s: string) {
   return s.toLowerCase().normalize("NFD").replace(COMBINING_MARKS_RE, "");
@@ -158,7 +199,7 @@ const OUTLINE_DARK = "border-zinc-700 text-zinc-100 hover:bg-zinc-800";
 const INSTRUCTIONS: string[] = [
   "Votre classement est sauvegardé automatiquement dans CE navigateur (localStorage). Redémarrer l'ordinateur ne supprime pas ces données.",
   "Pour retrouver votre travail sur un autre appareil : utilisez la section 'Seed (sauvegarde cloud)'.",
-  "1) Cliquez sur 'Publier (nouveau seed)' : un ID et un lien ?seed=… sont générés. Ajoutez ce lien en favoris ou partagez‑le.",
+  "1) Choisissez ou créez une catégorie, puis cliquez sur 'Publier (nouveau seed)' : un ID et un lien ?category=…&seed=… sont générés.",
   "2) Quand vous modifiez la tier list, cliquez sur 'Mettre à jour le seed' pour enregistrer la nouvelle version sous le même ID.",
   "3) Si quelqu'un ouvre votre lien, il voit votre classement. Il peut ensuite cliquer 'Publier (nouveau seed)' pour créer sa propre copie (son ID).",
   "Astuce : le bouton 'Partager le lien' encode l'état DANS l'URL (utile pour de petites listes). Pour 3 500 items, préférez les seeds.",
@@ -371,6 +412,8 @@ function stateFromNames(names: string[]): AppState {
   containers[POOL_ID] = sortIdsAlpha(pool, items);
 
   return {
+    categorySlug: DEFAULT_CATEGORY_SLUG,
+    categoryLabel: DEFAULT_CATEGORY_LABEL,
     axes: [talentAxis, styleAxis],
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
@@ -404,7 +447,7 @@ function decodeState(s: string): any | null {
 
 function migrateOldState(obj: any): AppState | null {
   if (!obj) return null;
-  if (obj.axes && Array.isArray(obj.axes)) return obj as AppState;
+  if (obj.axes && Array.isArray(obj.axes)) return normalizeStateCategory(obj as AppState);
 
   const rows = Array.isArray(obj.rows)
     ? obj.rows.map((r: any, i: number) => typeof r === "string" ? { label: r, color: DEFAULT_ROWS[i % DEFAULT_ROWS.length].color } : r)
@@ -467,6 +510,8 @@ function migrateOldState(obj: any): AppState | null {
   }
 
   return {
+    categorySlug: obj.categorySlug || DEFAULT_CATEGORY_SLUG,
+    categoryLabel: obj.categoryLabel || DEFAULT_CATEGORY_LABEL,
     axes: [talentAxis, styleAxis],
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
@@ -506,6 +551,9 @@ export default function TierList2D() {
   const [publishing, setPublishing] = useState(false);
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [lastSeedId, setLastSeedId] = useState<string | null>(null);
+  const [categoryInput, setCategoryInput] = useState(initialState.categoryLabel);
+  const [categorySeeds, setCategorySeeds] = useState<SeedSummary[]>([]);
+  const [loadingCategorySeeds, setLoadingCategorySeeds] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
   const [showAxisManager, setShowAxisManager] = useState(false);
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
@@ -574,19 +622,31 @@ export default function TierList2D() {
 
   useEffect(() => {
     try {
-      const sid = localStorage.getItem("tier2d-last-seed-id");
+      const sid = localStorage.getItem(`tier2d-last-seed-id-${state.categorySlug}`);
       if (sid) setLastSeedId(sid);
+      else setLastSeedId(null);
     } catch {}
-  }, []);
+  }, [state.categorySlug]);
 
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
       const url = new URL(window.location.href);
+      const category = url.searchParams.get('category');
       const seed = url.searchParams.get('seed');
-      if (seed) loadSeed(seed);
+      if (category && !seed) {
+        const label = url.searchParams.get('categoryName') || labelFromCategorySlug(category);
+        setState(prev => ({ ...prev, categorySlug: categorySlugFromLabel(category), categoryLabel: label }));
+        setCategoryInput(label);
+      }
+      if (seed) loadSeed(seed, category || undefined);
     } catch {}
   }, []);
+
+  useEffect(() => {
+    setCategoryInput(state.categoryLabel);
+    refreshCategorySeeds(state.categorySlug);
+  }, [state.categorySlug, state.categoryLabel]);
 
   useEffect(() => {
   if (!openCommentId) return;
@@ -828,7 +888,7 @@ function rebuildContainersForAxes(
     });
   }
   function resetAll() {
-    setState(stateFromNames([]));
+    setState(withCategory(stateFromNames([]), state.categoryLabel));
     history.replaceState(null, "", "#");
   }
 
@@ -884,10 +944,64 @@ function rebuildContainersForAxes(
     reader.readAsText(file);
   }
 
+  async function refreshCategorySeeds(categorySlug = state.categorySlug) {
+    try {
+      setLoadingCategorySeeds(true);
+      const res = await fetch(`/api/seed?category=${encodeURIComponent(categorySlug)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setCategorySeeds(Array.isArray(data.seeds) ? data.seeds : []);
+    } catch {
+      setCategorySeeds([]);
+    } finally {
+      setLoadingCategorySeeds(false);
+    }
+  }
+
+  function applyCategory(label: string) {
+    const cleanLabel = label.trim() || DEFAULT_CATEGORY_LABEL;
+    setState(prev => withCategory(prev, cleanLabel));
+    setCategoryInput(cleanLabel);
+    setLastSeedId(null);
+  }
+
+  function createCategory() {
+    const cleanLabel = categoryInput.trim();
+    if (!cleanLabel) return;
+    setState(withCategory(stateFromNames([]), cleanLabel));
+    setSelectedId(null);
+    setOpenCommentId(null);
+    setShowInfoId(null);
+    setLastSeedId(null);
+  }
+
+  function shareCategoryURL() {
+    const url = `${location.origin}${location.pathname}?category=${encodeURIComponent(state.categorySlug)}&categoryName=${encodeURIComponent(state.categoryLabel)}`;
+    navigator.clipboard?.writeText(url);
+    alert(`Lien de catégorie copié : ${url}`);
+  }
+
+  function seedApiUrl(seedId: string, categorySlug = state.categorySlug) {
+    return `/api/seed/${encodeURIComponent(seedId)}?category=${encodeURIComponent(categorySlug)}`;
+  }
+
+  function parseSeedInput(input: string, fallbackCategory = state.categorySlug) {
+    const raw = input.trim();
+    if (!raw) return { seedId: "", categorySlug: fallbackCategory };
+    try {
+      const url = new URL(raw);
+      const seed = url.searchParams.get("seed") || raw.split("/").filter(Boolean).pop() || "";
+      const category = url.searchParams.get("category") || fallbackCategory;
+      return { seedId: seed, categorySlug: categorySlugFromLabel(category) };
+    } catch {
+      return { seedId: raw, categorySlug: fallbackCategory };
+    }
+  }
+
   function shareURL() {
     const enc = encodeState(state);
     if (!enc) return;
-    const url = `${location.origin}${location.pathname}#${enc}`;
+    const url = `${location.origin}${location.pathname}?category=${encodeURIComponent(state.categorySlug)}#${enc}`;
     navigator.clipboard?.writeText(url);
     alert("Lien copié dans le presse-papiers");
   }
@@ -896,7 +1010,11 @@ function rebuildContainersForAxes(
     try {
       setPublishing(true);
       const encoded = encodeState(state);
-      const payload: any = { data: encoded };
+      const payload: any = {
+        data: encoded,
+        categorySlug: state.categorySlug,
+        categoryLabel: state.categoryLabel,
+      };
       if (explicitId && explicitId.trim()) payload.id = explicitId.trim();
       const res = await fetch('/api/seed', {
         method: 'POST',
@@ -908,9 +1026,10 @@ function rebuildContainersForAxes(
       const id: string = j.id;
       setLastSeedId(id);
       try {
-        localStorage.setItem('tier2d-last-seed-id', id);
+        localStorage.setItem(`tier2d-last-seed-id-${state.categorySlug}`, id);
       } catch {}
-      const share = `${location.origin}${location.pathname}?seed=${encodeURIComponent(id)}`;
+      await refreshCategorySeeds(state.categorySlug);
+      const share = `${location.origin}${location.pathname}?category=${encodeURIComponent(state.categorySlug)}&seed=${encodeURIComponent(id)}`;
       await navigator.clipboard?.writeText(share);
       alert(`Seed publié !\nID: ${id}\nLien copié : ${share}`);
     } catch (e: any) {
@@ -920,22 +1039,23 @@ function rebuildContainersForAxes(
     }
   }
 
-  async function loadSeed(input: string) {
+  async function loadSeed(input: string, explicitCategorySlug?: string) {
     try {
       setLoadingSeed(true);
-      let url = input.trim();
-      if (!/^https?:\/\//i.test(url)) url = `/api/seed/${encodeURIComponent(url)}`;
-      const res = await fetch(url);
+      const parsed = parseSeedInput(input, explicitCategorySlug || state.categorySlug);
+      if (!parsed.seedId) return;
+      const res = await fetch(seedApiUrl(parsed.seedId, parsed.categorySlug));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = await res.json();
       const dec = decodeState(j.data);
       const mig = migrateOldState(dec);
       if (mig) {
         setState(mig);
+        setCategoryInput(mig.categoryLabel);
         if (j.id) {
           setLastSeedId(j.id);
           try {
-            localStorage.setItem('tier2d-last-seed-id', j.id);
+            localStorage.setItem(`tier2d-last-seed-id-${mig.categorySlug}`, j.id);
           } catch {}
         }
         alert('Seed chargée');
@@ -1197,7 +1317,7 @@ function rebuildContainersForAxes(
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D — Rap FR</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D — {state.categoryLabel}</h1>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
@@ -1259,6 +1379,58 @@ function rebuildContainersForAxes(
             </Button>
           </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Catégorie</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className={INPUT_DARK + " w-64"}
+                value={categoryInput}
+                onChange={(e) => setCategoryInput(e.target.value)}
+                placeholder="Rap français, JV, cinéma..."
+              />
+              <Button variant="outline" className={OUTLINE_DARK} onClick={() => applyCategory(categoryInput)}>
+                Renommer
+              </Button>
+              <Button variant="outline" className={OUTLINE_DARK} onClick={createCategory}>
+                <Plus className="w-4 h-4 mr-2" /> Créer une catégorie
+              </Button>
+              <Button variant="outline" className={OUTLINE_DARK} onClick={shareCategoryURL}>
+                <Link2 className="w-4 h-4 mr-2" /> Partager la catégorie
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cx("text-sm", T.mutedText)}>
+                Seeds publiques de <strong className="text-zinc-100">{state.categoryLabel}</strong>
+              </span>
+              <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => refreshCategorySeeds()}>
+                {loadingCategorySeeds ? "Chargement..." : "Rafraîchir"}
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categorySeeds.length ? categorySeeds.map(seed => (
+                <Button
+                  key={`${seed.categorySlug}-${seed.id}`}
+                  variant="outline"
+                  className={OUTLINE_DARK}
+                  size="sm"
+                  onClick={() => loadSeed(seed.id, seed.categorySlug)}
+                  title={seed.uploadedAt ? new Date(seed.uploadedAt).toLocaleString("fr-FR") : undefined}
+                >
+                  {seed.id.slice(0, 8)}
+                </Button>
+              )) : (
+                <span className={cx("text-sm", T.mutedText)}>
+                  {loadingCategorySeeds ? "Chargement des seeds..." : "Aucune seed publique dans cette catégorie."}
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex items-center justify-between gap-2">
