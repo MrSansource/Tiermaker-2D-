@@ -230,9 +230,10 @@ function Tile({
         onClick?.(); 
       }}
       className={cx(
-        "relative overflow-hidden select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
+        "relative overflow-visible select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
         "bg-zinc-900 border-zinc-700 text-zinc-100",
-        selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : ""
+        selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : "",
+        showInfo ? "z-50" : "z-0"
       )}
       {...attributes}
       {...listeners}
@@ -257,8 +258,10 @@ function Tile({
 
       {hasPositions && (
         <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
-          className="absolute top-8 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
+          className="absolute top-8 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
           title="Informations de classement"
         >
           <span className="text-xs font-bold text-white">i</span>
@@ -289,8 +292,10 @@ function Tile({
 
       {comment && (
         <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onCommentToggle?.(id); }}
-          className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
+          className="absolute top-1 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
           title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
         >
           {isCommentOpen ? <X className="h-3.5 w-3.5 text-zinc-100" /> : <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />}
