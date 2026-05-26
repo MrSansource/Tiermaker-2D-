@@ -44,6 +44,7 @@ type AppState = {
   axes: AxisDefinition[];
   activeVerticalAxisId: string;
   activeHorizontalAxisId: string;
+  activeColorAxisId?: string | null;
   containers: Record<string, string[]>;
   items: Record<string, Item>;
   poolId: string;
@@ -126,6 +127,7 @@ function normalizeStateCategory(state: AppState): AppState {
     ...state,
     categoryLabel: label,
     categorySlug: state.categorySlug || categorySlugFromLabel(label),
+    activeColorAxisId: state.activeColorAxisId || null,
   };
 }
 
@@ -234,7 +236,7 @@ function chipCls(active: boolean) {
 }
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
-  isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle,
+  isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -243,6 +245,7 @@ function Tile({
   axes?: AxisDefinition[];
   showInfo?: boolean;
   onInfoToggle?: (id: string) => void;
+  colorFrame?: { color: string; label: string } | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -252,6 +255,12 @@ function Tile({
     width: tileSize,
     height: tileSize,
     touchAction: "none",
+    ...(colorFrame
+      ? {
+          borderColor: colorFrame.color,
+          boxShadow: `0 0 0 2px ${colorFrame.color}, 0 6px 16px rgba(0,0,0,0.25)`,
+        }
+      : {}),
   };
 
   const hasPositions = axisPositions && Object.values(axisPositions).some(v => v !== null && v !== -1);
@@ -273,9 +282,11 @@ function Tile({
       className={cx(
         "relative overflow-visible select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
         "bg-zinc-900 border-zinc-700 text-zinc-100",
+        colorFrame ? "border-2" : "",
         selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : "",
         showInfo ? "z-50" : "z-0"
       )}
+      title={colorFrame ? `Axe couleur : ${colorFrame.label}` : undefined}
       {...attributes}
       {...listeners}
     >
@@ -417,6 +428,7 @@ function stateFromNames(names: string[]): AppState {
     axes: [talentAxis, styleAxis],
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
+    activeColorAxisId: null,
     containers,
     items,
     poolId: POOL_ID,
@@ -515,6 +527,7 @@ function migrateOldState(obj: any): AppState | null {
     axes: [talentAxis, styleAxis],
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
+    activeColorAxisId: obj.activeColorAxisId || null,
     containers,
     items,
     poolId: POOL_ID,
@@ -573,6 +586,9 @@ export default function TierList2D() {
 
   const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId) || state.axes[0];
   const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId) || state.axes[1] || state.axes[0];
+  const colorAxis = state.activeColorAxisId
+    ? state.axes.find(a => a.id === state.activeColorAxisId)
+    : null;
   const visibleVTiers = vAxis.tiers
     .map((tier, index) => ({ tier, index }))
     .filter(({ tier }) => !tier.hidden);
@@ -589,6 +605,15 @@ export default function TierList2D() {
     }
     return s;
   }, [state.items, search]);
+
+  const getColorFrame = (itemId: string) => {
+    if (!colorAxis) return null;
+    const pos = state.items[itemId]?.axisPositions?.[colorAxis.id];
+    if (pos === null || pos === undefined || pos < 0) return null;
+    const tier = colorAxis.tiers[pos];
+    if (!tier) return null;
+    return { color: tier.color, label: `${colorAxis.label} : ${tier.label}` };
+  };
 
   useEffect(() => {
     try {
@@ -1129,7 +1154,7 @@ function rebuildContainersForAxes(
       alert("Vous devez conserver au moins 2 axes");
       return;
     }
-    if (axisId === state.activeVerticalAxisId || axisId === state.activeHorizontalAxisId) {
+    if (axisId === state.activeVerticalAxisId || axisId === state.activeHorizontalAxisId || axisId === state.activeColorAxisId) {
       alert("Impossible de supprimer un axe actif. Changez d'abord les axes affichés.");
       return;
     }
@@ -1256,7 +1281,12 @@ function rebuildContainersForAxes(
         vAxis.tiers.length,
         hAxis.tiers.length
       );
-      return { ...prev, activeVerticalAxisId: newId, containers };
+      return {
+        ...prev,
+        activeVerticalAxisId: newId,
+        activeColorAxisId: prev.activeColorAxisId === newId ? null : prev.activeColorAxisId,
+        containers,
+      };
     });
   }
 
@@ -1276,8 +1306,22 @@ function rebuildContainersForAxes(
         vAxis.tiers.length,
         hAxis.tiers.length
       );
-      return { ...prev, activeHorizontalAxisId: newId, containers };
+      return {
+        ...prev,
+        activeHorizontalAxisId: newId,
+        activeColorAxisId: prev.activeColorAxisId === newId ? null : prev.activeColorAxisId,
+        containers,
+      };
     });
+  }
+
+  function switchColorAxis(newId: string) {
+    const axisId = newId || null;
+    if (axisId && (axisId === state.activeVerticalAxisId || axisId === state.activeHorizontalAxisId)) {
+      alert("L'axe couleur doit etre different des axes vertical et horizontal");
+      return;
+    }
+    setState(prev => ({ ...prev, activeColorAxisId: axisId }));
   }
 
   const T = DARK;
@@ -1480,7 +1524,7 @@ function rebuildContainersForAxes(
           </CardHeader>
           {showAxisManager && (
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label className="mb-2 block">Axe vertical actif</Label>
                   <select
@@ -1503,6 +1547,21 @@ function rebuildContainersForAxes(
                     {state.axes.map(axis => (
                       <option key={axis.id} value={axis.id}>{axis.label}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="mb-2 block">Axe couleur (cadre)</Label>
+                  <select
+                    className={cx("w-full p-2 rounded", INPUT_DARK)}
+                    value={state.activeColorAxisId || ""}
+                    onChange={(e) => switchColorAxis(e.target.value)}
+                  >
+                    <option value="">Aucun</option>
+                    {state.axes
+                      .filter(axis => axis.id !== state.activeVerticalAxisId && axis.id !== state.activeHorizontalAxisId)
+                      .map(axis => (
+                        <option key={axis.id} value={axis.id}>{axis.label}</option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -1750,6 +1809,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -1801,6 +1861,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -1861,6 +1922,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -1912,6 +1974,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -1995,6 +2058,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2139,6 +2203,7 @@ function rebuildContainersForAxes(
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[activeId]?.axisPositions}
                                 axes={state.axes}
+                                colorFrame={getColorFrame(activeId)}
                                 showInfo={showInfoId === activeId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
