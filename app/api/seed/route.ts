@@ -43,6 +43,33 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
+    if (url.searchParams.get("categories") === "1") {
+      const { blobs } = await list({ prefix: "seeds/", limit: 1000 });
+      const categories = new Map<string, { slug: string; label: string; seedCount: number; updatedAt?: string }>();
+
+      for (const blob of blobs.filter(blob => blob.pathname.endsWith(".txt"))) {
+        const match = blob.pathname.match(/^seeds\/([^/]+)\//);
+        const slug = match ? match[1] : DEFAULT_CATEGORY;
+        const current = categories.get(slug) || {
+          slug,
+          label: slug.split("-").filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" "),
+          seedCount: 0,
+          updatedAt: undefined,
+        };
+
+        current.seedCount += 1;
+        if (!current.updatedAt || String(blob.uploadedAt || "") > String(current.updatedAt || "")) {
+          current.updatedAt = blob.uploadedAt ? String(blob.uploadedAt) : undefined;
+        }
+        categories.set(slug, current);
+      }
+
+      return Response.json({
+        categories: Array.from(categories.values())
+          .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))),
+      });
+    }
+
     const category = safeSegment(url.searchParams.get("category"), DEFAULT_CATEGORY);
     const prefix = `seeds/${category}/`;
     const { blobs } = await list({ prefix, limit: 1000 });

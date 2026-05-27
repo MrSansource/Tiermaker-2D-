@@ -59,6 +59,13 @@ type SeedSummary = {
   url?: string;
 };
 
+type CategorySummary = {
+  slug: string;
+  label: string;
+  seedCount: number;
+  updatedAt?: string;
+};
+
 const POOL_ID = "__pool__";
 const UNCLASSIFIED_INDEX = -1;
 const DEFAULT_CATEGORY_LABEL = "Rap français";
@@ -567,6 +574,10 @@ export default function TierList2D() {
   const [categoryInput, setCategoryInput] = useState(initialState.categoryLabel);
   const [categorySeeds, setCategorySeeds] = useState<SeedSummary[]>([]);
   const [loadingCategorySeeds, setLoadingCategorySeeds] = useState(false);
+  const [showCategoryBrowser, setShowCategoryBrowser] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
   const [showAxisManager, setShowAxisManager] = useState(false);
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
@@ -671,6 +682,7 @@ export default function TierList2D() {
   useEffect(() => {
     setCategoryInput(state.categoryLabel);
     refreshCategorySeeds(state.categorySlug);
+    refreshCategories();
   }, [state.categorySlug, state.categoryLabel]);
 
   useEffect(() => {
@@ -981,6 +993,46 @@ function rebuildContainersForAxes(
     } finally {
       setLoadingCategorySeeds(false);
     }
+  }
+
+  async function refreshCategories() {
+    try {
+      setLoadingCategories(true);
+      const res = await fetch("/api/seed?categories=1");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setCategories(Array.isArray(data.categories) ? data.categories : []);
+    } catch {
+      setCategories([]);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }
+
+  function navigateToCategory(category: CategorySummary) {
+    const next = withCategory(stateFromNames([]), category.label);
+    const normalized = { ...next, categorySlug: category.slug };
+    setState(normalized);
+    setCategoryInput(category.label);
+    setSeedInput("");
+    setSelectedId(null);
+    setOpenCommentId(null);
+    setShowInfoId(null);
+    setLastSeedId(null);
+    try {
+      const url = `${location.pathname}?category=${encodeURIComponent(category.slug)}&categoryName=${encodeURIComponent(category.label)}`;
+      history.replaceState(null, "", url);
+    } catch {}
+  }
+
+  function goToCategoryByName() {
+    const wanted = categorySlugFromLabel(categorySearch);
+    const found = categories.find(category => category.slug === wanted);
+    if (!found) {
+      alert("Aucune categorie existante ne correspond a ce nom.");
+      return;
+    }
+    navigateToCategory(found);
   }
 
   function applyCategory(label: string) {
@@ -1357,6 +1409,13 @@ function rebuildContainersForAxes(
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
 
+  const filteredCategories = categorySearch.trim()
+    ? categories.filter(category =>
+        normalizeText(category.label).includes(normalizeText(categorySearch)) ||
+        normalizeText(category.slug).includes(normalizeText(categorySearch))
+      )
+    : categories;
+
  return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
@@ -1474,6 +1533,59 @@ function rebuildContainersForAxes(
               )}
             </div>
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-2">
+            <CardTitle>Navigation catégories</CardTitle>
+            <Button variant="outline" className={OUTLINE_DARK} size="sm" onClick={() => setShowCategoryBrowser(v => !v)}>
+              {showCategoryBrowser ? "Masquer" : "Afficher"}
+            </Button>
+          </CardHeader>
+          {showCategoryBrowser && (
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className={INPUT_DARK + " w-64"}
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  placeholder="Nom de categorie"
+                />
+                <Button variant="outline" className={OUTLINE_DARK} onClick={goToCategoryByName}>
+                  Aller
+                </Button>
+                <Button variant="outline" className={OUTLINE_DARK} onClick={refreshCategories}>
+                  {loadingCategories ? "Chargement..." : "Rafraichir"}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {filteredCategories.length ? filteredCategories.map(category => (
+                  <button
+                    key={category.slug}
+                    type="button"
+                    onClick={() => navigateToCategory(category)}
+                    className={cx(
+                      "text-left rounded-md border p-3 transition",
+                      category.slug === state.categorySlug
+                        ? "border-indigo-400 bg-indigo-500/10"
+                        : "border-zinc-700 hover:bg-zinc-800"
+                    )}
+                  >
+                    <div className="font-semibold">{category.label}</div>
+                    <div className={cx("text-xs", T.mutedText)}>
+                      {category.seedCount} seed{category.seedCount > 1 ? "s" : ""}
+                      {category.updatedAt ? ` - ${new Date(category.updatedAt).toLocaleDateString("fr-FR")}` : ""}
+                    </div>
+                  </button>
+                )) : (
+                  <span className={cx("text-sm", T.mutedText)}>
+                    {loadingCategories ? "Chargement des categories..." : "Aucune categorie trouvee."}
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         <Card>
