@@ -2048,7 +2048,23 @@ function rebuildContainersForAxes(
         </Card>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
-          <div className="flex flex-col xl:flex-row gap-3 items-start">
+          {colorAxis && (
+            <div className={cx("rounded-2xl border p-3", T.cardBg, T.cardBorder)}>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="text-sm font-semibold">{colorAxis.label}</div>
+                {colorAxis.tiers.map((tier, index) => (
+                  <div key={`${colorAxis.id}-legend-${index}`} className="flex items-center gap-2 text-sm">
+                    <span
+                      className="h-4 w-4 rounded-full border border-zinc-600"
+                      style={{ backgroundColor: tier.color }}
+                    />
+                    <span>{tier.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
               <div />
@@ -2303,24 +2319,6 @@ function rebuildContainersForAxes(
                 </React.Fragment>
               ))}
             </div>
-          </div>
-
-          {colorAxis && (
-            <aside className={cx("w-full xl:w-64 shrink-0 rounded-2xl border p-3", T.cardBg, T.cardBorder)}>
-              <div className="text-sm font-semibold mb-3">{colorAxis.label}</div>
-              <div className="space-y-2">
-                {colorAxis.tiers.map((tier, index) => (
-                  <div key={`${colorAxis.id}-legend-${index}`} className="flex items-center gap-2 text-sm">
-                    <span
-                      className="h-4 w-4 rounded-full border border-zinc-600"
-                      style={{ backgroundColor: tier.color }}
-                    />
-                    <span className="min-w-0 truncate">{tier.label}</span>
-                  </div>
-                ))}
-              </div>
-            </aside>
-          )}
           </div>
 
           <Card>
