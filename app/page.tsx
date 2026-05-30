@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Edit, Filter } from "lucide-react";
+import { Download, Link2, Plus, RefreshCcw, Upload, Scissors, Trash2, MessageSquare, X, Edit, Filter, Palette } from "lucide-react";
 
 type Tier = { label: string; color: string; hidden?: boolean; };
 
@@ -359,6 +359,7 @@ function chipCls(active: boolean) {
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
   isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
+  colorAxis, onColorCycle,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -368,6 +369,8 @@ function Tile({
   showInfo?: boolean;
   onInfoToggle?: (id: string) => void;
   colorFrame?: { color: string; label: string } | null;
+  colorAxis?: AxisDefinition | null;
+  onColorCycle?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -463,6 +466,19 @@ function Tile({
                 </div>
               </div>
             )}
+
+      {colorAxis && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onColorCycle?.(id); }}
+          className="absolute bottom-1 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
+          style={colorFrame ? { backgroundColor: colorFrame.color, color: textColorForBg(colorFrame.color) } : undefined}
+          title={`Changer ${colorAxis.label}`}
+        >
+          <Palette className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {comment && (
         <button
@@ -740,6 +756,36 @@ export default function TierList2D() {
     if (!tier) return null;
     return { color: tier.color, label: `${colorAxis.label} : ${tier.label}` };
   };
+
+  function cycleColorAxisPosition(itemId: string) {
+    if (!colorAxis || !colorAxis.tiers.length) return;
+    setState(prev => {
+      const axis = prev.axes.find(a => a.id === colorAxis.id);
+      const item = prev.items[itemId];
+      if (!axis || !item) return prev;
+
+      const current = item.axisPositions[axis.id];
+      const next = current === null || current === undefined || current < 0
+        ? 0
+        : current + 1 >= axis.tiers.length
+          ? 0
+          : current + 1;
+
+      return {
+        ...prev,
+        items: {
+          ...prev.items,
+          [itemId]: {
+            ...item,
+            axisPositions: {
+              ...item.axisPositions,
+              [axis.id]: next,
+            },
+          },
+        },
+      };
+    });
+  }
 
   useEffect(() => {
     try {
@@ -2002,6 +2048,7 @@ function rebuildContainersForAxes(
         </Card>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
+          <div className="flex flex-col xl:flex-row gap-3 items-start">
           <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
               <div />
@@ -2065,6 +2112,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(itemId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2117,6 +2166,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(itemId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2178,6 +2229,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(itemId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2230,6 +2283,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(itemId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2248,6 +2303,24 @@ function rebuildContainersForAxes(
                 </React.Fragment>
               ))}
             </div>
+          </div>
+
+          {colorAxis && (
+            <aside className={cx("w-full xl:w-64 shrink-0 rounded-2xl border p-3", T.cardBg, T.cardBorder)}>
+              <div className="text-sm font-semibold mb-3">{colorAxis.label}</div>
+              <div className="space-y-2">
+                {colorAxis.tiers.map((tier, index) => (
+                  <div key={`${colorAxis.id}-legend-${index}`} className="flex items-center gap-2 text-sm">
+                    <span
+                      className="h-4 w-4 rounded-full border border-zinc-600"
+                      style={{ backgroundColor: tier.color }}
+                    />
+                    <span className="min-w-0 truncate">{tier.label}</span>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          )}
           </div>
 
           <Card>
@@ -2314,6 +2387,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[itemId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(itemId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2459,6 +2534,8 @@ function rebuildContainersForAxes(
                                 axisPositions={state.items[activeId]?.axisPositions}
                                 axes={state.axes}
                                 colorFrame={getColorFrame(activeId)}
+                                colorAxis={colorAxis}
+                                onColorCycle={cycleColorAxisPosition}
                                 showInfo={showInfoId === activeId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
