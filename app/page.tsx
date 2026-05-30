@@ -92,6 +92,11 @@ const DEFAULT_COLS: Tier[] = [
   { label: "Autre", color: "#94a3b8" },
 ];
 
+const IMPORT_TIER_COLORS = [
+  "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#06b6d4",
+  "#3b82f6", "#6366f1", "#a855f7", "#ec4899", "#94a3b8",
+];
+
 const COMBINING_MARKS_RE = /[\u0300-\u036f]/g;
 const NON_ALNUM_RE = /[^a-z0-9]+/g;
 const EDGE_DASH_RE = /(^-|-$)+/g;
@@ -188,6 +193,116 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
     }
   }
   return out;
+}
+
+function splitImportLine(line: string) {
+  if (line.includes("\t")) return line.split("\t").map(cell => cell.trim());
+  if (line.includes(";")) return line.split(";").map(cell => cell.trim());
+  if (line.includes(",")) return line.split(",").map(cell => cell.trim());
+  return [line.trim()];
+}
+
+function looksLikeSheetImport(text: string) {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  const headers = splitImportLine(lines[0]).map(normalizeText);
+  return headers.length >= 4 &&
+    headers[0] === "nom" &&
+    (headers[1] === "image" || headers[1] === "url" || headers[1] === "lien") &&
+    headers[2] === "commentaire";
+}
+
+function parseSheetImport(text: string) {
+  const rows = text.split(/\r?\n/)
+    .map(line => splitImportLine(line))
+    .filter(row => row.some(cell => cell.trim()));
+  if (rows.length < 2) return null;
+
+  const headers = rows[0];
+  if (headers.length < 4) return null;
+
+  const axisHeaders = headers.slice(3).map((header, index) => header.trim() || `Axe ${index + 1}`);
+  const usedAxisIds = new Set<string>();
+  const axes: AxisDefinition[] = axisHeaders.map((label, index) => {
+    const baseId = slug(label) || `axis-${index + 1}`;
+    let id = baseId;
+    let suffix = 2;
+    while (usedAxisIds.has(id)) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    usedAxisIds.add(id);
+    return {
+      id,
+      label,
+      tiers: [],
+      tierWidths: [],
+      unclassifiedSize: 150,
+    };
+  });
+
+  const tierIndexes = axes.map(() => new Map<string, number>());
+  const items: Record<string, Item> = {};
+  const allIds: string[] = [];
+
+  for (const row of rows.slice(1)) {
+    const name = (row[0] || "").trim();
+    if (!name) continue;
+
+    const base = slug(name) || Math.random().toString(36).slice(2);
+    const id = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+    const axisPositions: Record<string, number | null> = {};
+
+    axes.forEach((axis, axisIndex) => {
+      const value = (row[axisIndex + 3] || "").trim();
+      if (!value) {
+        axisPositions[axis.id] = null;
+        return;
+      }
+
+      const key = normalizeText(value);
+      let tierIndex = tierIndexes[axisIndex].get(key);
+      if (tierIndex === undefined) {
+        tierIndex = axis.tiers.length;
+        tierIndexes[axisIndex].set(key, tierIndex);
+        axis.tiers.push({
+          label: value,
+          color: IMPORT_TIER_COLORS[tierIndex % IMPORT_TIER_COLORS.length],
+        });
+        axis.tierWidths?.push(220);
+      }
+      axisPositions[axis.id] = tierIndex;
+    });
+
+    items[id] = {
+      id,
+      name,
+      image: (row[1] || "").trim() || undefined,
+      comment: (row[2] || "").trim() || undefined,
+      axisPositions,
+    };
+    allIds.push(id);
+  }
+
+  const finalAxes = axes.map(axis => ({
+    ...axis,
+    tiers: axis.tiers.length ? axis.tiers : [{ label: "A classer", color: "#94a3b8" }],
+    tierWidths: axis.tierWidths?.length ? axis.tierWidths : [220],
+  }));
+
+  while (finalAxes.length < 2) {
+    const id = `axis-${finalAxes.length + 1}`;
+    finalAxes.push({
+      id,
+      label: `Axe ${finalAxes.length + 1}`,
+      tiers: [{ label: "A classer", color: "#94a3b8" }],
+      tierWidths: [220],
+      unclassifiedSize: 150,
+    });
+    for (const item of Object.values(items)) item.axisPositions[id] = null;
+  }
+
+  return { axes: finalAxes, items, allIds };
 }
 
 function cx(...cls: Array<string | false | null | undefined>) {
@@ -1147,6 +1262,34 @@ function rebuildContainersForAxes(
   }
 
   function importPairs() {
+    if (looksLikeSheetImport(pairsText)) {
+      const sheet = parseSheetImport(pairsText);
+      if (!sheet || !sheet.allIds.length) return;
+
+      const activeVerticalAxisId = sheet.axes[0].id;
+      const activeHorizontalAxisId = sheet.axes[1].id;
+      const containers = rebuildContainersForAxes(
+        sheet.items,
+        activeVerticalAxisId,
+        activeHorizontalAxisId,
+        sheet.axes[0].tiers.length,
+        sheet.axes[1].tiers.length
+      );
+      containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID] || [], sheet.items);
+
+      setPairsText("");
+      setState((s) => ({
+        ...s,
+        axes: sheet.axes,
+        activeVerticalAxisId,
+        activeHorizontalAxisId,
+        activeColorAxisId: sheet.axes[2]?.id || null,
+        items: sheet.items,
+        containers,
+      }));
+      return;
+    }
+
     const entries = parsePairs(pairsText);
     if (!entries.length) return;
     const items = { ...state.items };
@@ -2335,19 +2478,19 @@ function rebuildContainersForAxes(
             <p className={cx("text-sm", T.mutedText)}>
               Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>,{" "}
               <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>,{" "}
-              <code>Nom;URL;Commentaire</code>. L'image et le commentaire sont optionnels.
+              <code>Nom;URL;Commentaire</code>. Google Sheets : collez un tableau avec{" "}<code>Nom | Image | Commentaire | Axe 1 | Axe 2...</code> en première ligne.
             </p>
             <Textarea
               className={cx("w-full resize-y", INPUT_DARK)}
               rows={6}
               value={pairsText}
               onChange={(e) => setPairsText(e.target.value)}
-              placeholder={`Ex.\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\nPNL | https://exemple.com/pnl.webp`}
+              placeholder={`Ex. simple\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\n\nEx. Google Sheets\nNom\tImage\tCommentaire\tTalent\tStyle\nNekfeu\thttps://exemple.com/nekfeu.jpg\tNote perso\tExcellent\tStreet`}
             />
             <div className="flex gap-2">
               <Button onClick={importPairs}>
                 <Upload className="w-4 h-4 mr-2" />
-                Ajouter au bac
+                Importer
               </Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
                 <Trash2 className="w-4 h-4 mr-2" />
