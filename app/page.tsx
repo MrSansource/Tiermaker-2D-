@@ -1552,10 +1552,11 @@ function rebuildContainersForAxes(
           const target = targets.shift();
           if (!target) return;
           const cacheKey = normalizeText(target.name);
-          let imageUrl = cache.get(cacheKey);
-          if (imageUrl === undefined) {
-            imageUrl = await findWikipediaImage(target.name) || "";
-            cache.set(cacheKey, imageUrl);
+          let imageUrl = cache.get(cacheKey) || "";
+          if (!cache.has(cacheKey)) {
+            const fetchedImageUrl = await findWikipediaImage(target.name) || "";
+            cache.set(cacheKey, fetchedImageUrl);
+            imageUrl = fetchedImageUrl;
           }
           done += 1;
           if (!imageUrl) continue;
