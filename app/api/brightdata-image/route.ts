@@ -8,17 +8,26 @@ type BrightImageResult = {
 };
 
 function firstImageResult(data: any) {
+  const body = typeof data?.body === "string" ? tryParseJson(data.body) : data?.body;
   const candidates = [
     data?.images,
     data?.image_results,
     data?.images_results,
     data?.organic,
-    data?.body?.images,
+    body?.images,
   ].find(Array.isArray);
 
   return candidates?.find((item: any) =>
     item?.original_image || item?.original || item?.image || item?.thumbnail || item?.link
   );
+}
+
+function tryParseJson(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: Request) {
@@ -43,7 +52,6 @@ export async function GET(req: Request) {
     const googleParams = new URLSearchParams({
       q: query,
       udm: "2",
-      tbm: "isch",
       hl: "fr",
       gl: "fr",
       safe: "off",
@@ -56,20 +64,25 @@ export async function GET(req: Request) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         Accept: "application/json",
+        "x-unblock-data-format": "parsed_light",
       },
       body: JSON.stringify({
         zone,
         url: `https://www.google.com/search?${googleParams.toString()}`,
-        format: "json",
+        format: "raw",
         method: "GET",
         country: "fr",
       }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const bodyText = await res.text();
+    const data = tryParseJson(bodyText) || { body: bodyText };
     if (!res.ok || data?.error) {
       return new Response(
-        JSON.stringify({ error: data?.error || data?.message || "Bright Data image lookup failed" }),
+        JSON.stringify({
+          error: data?.error || data?.message || bodyText.slice(0, 500) || "Bright Data image lookup failed",
+          status: res.status,
+        }),
         { status: res.ok ? 500 : res.status }
       );
     }
@@ -82,7 +95,11 @@ export async function GET(req: Request) {
       source: item?.source || item?.display_link,
     };
 
-    return Response.json(result.imageUrl ? result : { imageUrl: null, debugShape: Object.keys(data || {}) });
+    return Response.json(result.imageUrl ? result : {
+      imageUrl: null,
+      error: "Bright Data response did not include an image result",
+      debugShape: Object.keys(data || {}),
+    });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || "Bright Data image lookup failed" }), { status: 500 });
   }
