@@ -45,6 +45,8 @@ type AppState = {
   activeVerticalAxisId: string;
   activeHorizontalAxisId: string;
   activeColorAxisId?: string | null;
+  tileLinksEnabled?: boolean;
+  tileLinkTemplate?: string;
   containers: Record<string, string[]>;
   items: Record<string, Item>;
   poolId: string;
@@ -70,6 +72,7 @@ const POOL_ID = "__pool__";
 const UNCLASSIFIED_INDEX = -1;
 const DEFAULT_CATEGORY_LABEL = "Rap français";
 const DEFAULT_CATEGORY_SLUG = "rap-francais";
+const DEFAULT_TILE_LINK_TEMPLATE = "https://www.google.com/search?q={name}";
 
 const DEFAULT_ROWS: Tier[] = [
   { label: "GOATS", color: "#f59e0b" },
@@ -140,6 +143,8 @@ function normalizeStateCategory(state: AppState): AppState {
     categoryLabel: label,
     categorySlug: state.categorySlug || categorySlugFromLabel(label),
     activeColorAxisId: state.activeColorAxisId || null,
+    tileLinksEnabled: state.tileLinksEnabled || false,
+    tileLinkTemplate: state.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE,
   };
 }
 
@@ -193,6 +198,13 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
     }
   }
   return out;
+}
+
+function buildTileLink(template: string, name: string) {
+  const encodedName = encodeURIComponent(name);
+  const safeTemplate = (template || DEFAULT_TILE_LINK_TEMPLATE).trim();
+  if (safeTemplate.includes("{name}")) return safeTemplate.replaceAll("{name}", encodedName);
+  return `${safeTemplate}${encodedName}`;
 }
 
 function splitImportLine(line: string) {
@@ -359,7 +371,7 @@ function chipCls(active: boolean) {
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
   isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
-  colorAxis, onColorCycle,
+  colorAxis, onColorCycle, tileLink,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -371,6 +383,7 @@ function Tile({
   colorFrame?: { color: string; label: string } | null;
   colorAxis?: AxisDefinition | null;
   onColorCycle?: (id: string) => void;
+  tileLink?: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -389,6 +402,22 @@ function Tile({
   };
 
   const hasPositions = axisPositions && Object.values(axisPositions).some(v => v !== null && v !== -1);
+  const nameContent = tileLink ? (
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        window.open(tileLink, "_blank", "noopener,noreferrer");
+      }}
+      className="relative z-20 max-w-full text-center font-semibold text-white drop-shadow-sm underline-offset-2 hover:underline"
+      title={`Ouvrir ${tileLink}`}
+    >
+      {name}
+    </button>
+  ) : (
+    <span className="relative z-10 font-semibold text-white drop-shadow-sm">{name}</span>
+  );
 
   return (
     <motion.div
@@ -426,11 +455,26 @@ function Tile({
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
-            <span className="font-semibold text-white drop-shadow-sm px-1">{name}</span>
+            {nameContent}
           </div>
         </>
       ) : (
-        <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+        tileLink ? (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(tileLink, "_blank", "noopener,noreferrer");
+            }}
+            className="relative text-center leading-tight px-1 break-words z-20 hover:underline"
+            title={`Ouvrir ${tileLink}`}
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+        )
       )}
 
       {hasPositions && (
@@ -567,6 +611,8 @@ function stateFromNames(names: string[]): AppState {
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
     activeColorAxisId: null,
+    tileLinksEnabled: false,
+    tileLinkTemplate: DEFAULT_TILE_LINK_TEMPLATE,
     containers,
     items,
     poolId: POOL_ID,
@@ -666,6 +712,8 @@ function migrateOldState(obj: any): AppState | null {
     activeVerticalAxisId: "talent",
     activeHorizontalAxisId: "style",
     activeColorAxisId: obj.activeColorAxisId || null,
+    tileLinksEnabled: Boolean(obj.tileLinksEnabled),
+    tileLinkTemplate: obj.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE,
     containers,
     items,
     poolId: POOL_ID,
@@ -755,6 +803,13 @@ export default function TierList2D() {
     const tier = colorAxis.tiers[pos];
     if (!tier) return null;
     return { color: tier.color, label: `${colorAxis.label} : ${tier.label}` };
+  };
+
+  const getTileLink = (itemId: string) => {
+    if (!state.tileLinksEnabled) return null;
+    const item = state.items[itemId];
+    if (!item?.name) return null;
+    return buildTileLink(state.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE, item.name);
   };
 
   function cycleColorAxisPosition(itemId: string) {
@@ -2002,6 +2057,27 @@ function rebuildContainersForAxes(
                 </Button>
               )}
               <div className="w-px h-6 bg-zinc-700 mx-1" />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(state.tileLinksEnabled)}
+                  onChange={(e) => setState(s => ({ ...s, tileLinksEnabled: e.target.checked }))}
+                />
+                Liens sur les noms
+              </label>
+              <div className="flex flex-col gap-1 min-w-72">
+                <Input
+                  className={INPUT_DARK + " w-80 max-w-full"}
+                  value={state.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE}
+                  onChange={(e) => setState(s => ({ ...s, tileLinkTemplate: e.target.value }))}
+                  placeholder="https://www.google.com/search?q={name}"
+                  title="Utilisez {name} pour insérer le nom encodé. Exemples : https://www.google.com/search?q={name} ou https://www.youtube.com/results?search_query={name}"
+                />
+                <span className="text-[10px] leading-tight text-zinc-400">
+                  Mets {"{name}"} ou laisse juste un prefixe : le nom de la tuile sera ajoute a la fin.
+                </span>
+              </div>
+              <div className="w-px h-6 bg-zinc-700 mx-1" />
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
@@ -2130,6 +2206,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(itemId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2184,6 +2261,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(itemId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2247,6 +2325,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(itemId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2301,6 +2380,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(itemId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2387,6 +2467,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(itemId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(itemId)}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2534,6 +2615,7 @@ function rebuildContainersForAxes(
                                 colorFrame={getColorFrame(activeId)}
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
+                                tileLink={getTileLink(activeId)}
                                 showInfo={showInfoId === activeId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
