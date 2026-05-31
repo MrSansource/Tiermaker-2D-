@@ -557,12 +557,16 @@ function SortableTierHeader({
   label,
   color,
   className,
+  onRename,
 }: {
   id: string;
   label: string;
   color: string;
   className?: string;
+  onRename?: (label: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(label);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: React.CSSProperties = {
     backgroundColor: color,
@@ -571,17 +575,51 @@ function SortableTierHeader({
     transition,
     opacity: isDragging ? 0.7 : 1,
   };
+  const commitRename = () => {
+    const clean = draftLabel.trim();
+    if (clean && clean !== label) onRename?.(clean);
+    setDraftLabel(clean || label);
+    setIsEditing(false);
+  };
+  const dragProps = isEditing ? {} : { ...attributes, ...listeners };
 
   return (
     <div
       ref={setNodeRef}
-      className={cx(className, "cursor-grab active:cursor-grabbing select-none")}
+      className={cx(
+        className,
+        "flex items-center justify-center text-center",
+        isEditing ? "cursor-text" : "cursor-grab active:cursor-grabbing select-none"
+      )}
       style={style}
-      title="Glisser pour reordonner"
-      {...attributes}
-      {...listeners}
+      title={isEditing ? "Entrer pour valider" : "Double-cliquer pour renommer, glisser pour reordonner"}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setDraftLabel(label);
+        setIsEditing(true);
+      }}
+      {...dragProps}
     >
-      {label}
+      {isEditing ? (
+        <input
+          autoFocus
+          className="w-full rounded-md border border-white/40 bg-black/35 px-2 py-1 text-center text-sm font-semibold outline-none"
+          value={draftLabel}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setDraftLabel(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") {
+              setDraftLabel(label);
+              setIsEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <span className="w-full break-words">{label}</span>
+      )}
     </div>
   );
 }
@@ -2265,6 +2303,7 @@ function rebuildContainersForAxes(
                     id={tierDragId(hAxis.id, index)}
                     label={tier.label}
                     color={tier.color}
+                    onRename={(label) => updateTier(hAxis.id, index, { label })}
                     className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                   />
                 ))}
@@ -2394,6 +2433,7 @@ function rebuildContainersForAxes(
                       id={tierDragId(vAxis.id, ri)}
                       label={rowTier.label}
                       color={rowTier.color}
+                      onRename={(label) => updateTier(vAxis.id, ri, { label })}
                       className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                     />
 
