@@ -1228,6 +1228,32 @@ function rebuildContainersForAxes(
     if (openCommentId === id) setOpenCommentId(null);
   }
 
+  function deletePoolItems() {
+    const ids = state.containers[state.poolId] || [];
+    if (!ids.length) return;
+    if (!confirm(`Supprimer les ${ids.length} tuiles du bac ?`)) return;
+
+    setState((prev) => {
+      const poolIds = new Set(prev.containers[prev.poolId] || []);
+      const items = { ...prev.items };
+      for (const id of poolIds) delete items[id];
+
+      return {
+        ...prev,
+        items,
+        containers: {
+          ...prev.containers,
+          [prev.poolId]: [],
+        },
+      };
+    });
+    if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+    if (openCommentId && ids.includes(openCommentId)) {
+      setOpenCommentId(null);
+      setIsEditingComment(false);
+    }
+  }
+
   function moveTierInAxis(axisId: string, fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return;
     setState((prev) => {
@@ -2017,6 +2043,16 @@ function rebuildContainersForAxes(
               ))}
             </>
           )}
+          <Button
+            variant="outline"
+            className={OUTLINE_DARK}
+            size="sm"
+            disabled={!poolIds.length}
+            onClick={deletePoolItems}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Vider le bac
+          </Button>
         </div>
       </CardHeader>
       <CardContent className={cx(T.cardBg, isPoolPinned && "min-h-0 flex-1 overflow-auto")}>
@@ -2884,6 +2920,16 @@ function rebuildContainersForAxes(
                     ))}
                   </>
                 )}
+                <Button
+                  variant="outline"
+                  className={OUTLINE_DARK}
+                  size="sm"
+                  disabled={!poolIds.length}
+                  onClick={deletePoolItems}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Vider le bac
+                </Button>
               </div>
             </CardHeader>
             <CardContent className={T.cardBg}>
