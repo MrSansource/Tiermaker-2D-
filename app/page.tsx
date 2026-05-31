@@ -267,6 +267,21 @@ function isImageHeader(value: string) {
   return clean === "image" || clean === "url" || clean === "lien" || clean === "image url";
 }
 
+function isCommentHeader(value: string) {
+  const clean = normalizeText(value.trim());
+  return clean === "commentaire" || clean === "comment" || clean === "note" || clean === "notes";
+}
+
+function sheetImportColumns(headers: string[]) {
+  if (headers.length < 3 || !isNameHeader(headers[0]) || !isImageHeader(headers[1])) return null;
+  const commentIndex = headers.findIndex((header, index) => index >= 2 && isCommentHeader(header));
+  const axisColumns = headers
+    .map((header, index) => ({ header: header.trim(), index }))
+    .filter(({ index }) => index >= 2 && index !== commentIndex);
+  if (!axisColumns.length) return null;
+  return { commentIndex, axisColumns };
+}
+
 function isImageUrl(value?: string) {
   return /^https?:\/\/\S+/i.test((value || "").trim());
 }
@@ -274,11 +289,7 @@ function isImageUrl(value?: string) {
 function looksLikeSheetImport(text: string) {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (lines.length < 2) return false;
-  const headers = splitImportLine(lines[0]).map(normalizeText);
-  return headers.length >= 4 &&
-    headers[0] === "nom" &&
-    isImageHeader(headers[1]) &&
-    headers[2] === "commentaire";
+  return Boolean(sheetImportColumns(splitImportLine(lines[0])));
 }
 
 function parseSheetImport(text: string) {
@@ -288,11 +299,12 @@ function parseSheetImport(text: string) {
   if (rows.length < 2) return null;
 
   const headers = rows[0];
-  if (headers.length < 4) return null;
+  const columns = sheetImportColumns(headers);
+  if (!columns) return null;
 
-  const axisHeaders = headers.slice(3).map((header, index) => header.trim() || `Axe ${index + 1}`);
   const usedAxisIds = new Set<string>();
-  const axes: AxisDefinition[] = axisHeaders.map((label, index) => {
+  const axes: AxisDefinition[] = columns.axisColumns.map(({ header }, index) => {
+    const label = header || `Axe ${index + 1}`;
     const baseId = slug(label) || `axis-${index + 1}`;
     let id = baseId;
     let suffix = 2;
@@ -323,9 +335,13 @@ function parseSheetImport(text: string) {
     const axisPositions: Record<string, number | null> = {};
 
     axes.forEach((axis, axisIndex) => {
-      const value = (row[axisIndex + 3] || "").trim();
+      const value = (row[columns.axisColumns[axisIndex].index] || "").trim();
       if (!value) {
         axisPositions[axis.id] = null;
+        return;
+      }
+      if (normalizeText(value) === "x") {
+        axisPositions[axis.id] = UNCLASSIFIED_INDEX;
         return;
       }
 
@@ -347,7 +363,7 @@ function parseSheetImport(text: string) {
       id,
       name,
       image: (row[1] || "").trim() || undefined,
-      comment: (row[2] || "").trim() || undefined,
+      comment: columns.commentIndex >= 0 ? ((row[columns.commentIndex] || "").trim() || undefined) : undefined,
       axisPositions,
     };
     allIds.push(id);
@@ -1756,7 +1772,7 @@ function rebuildContainersForAxes(
       const rows = lines.map(line => splitImportLine(line));
       const first = rows[0] || [];
       const hasHeader = first.length > 0 && isNameHeader(first[0]);
-      const keepHeader = hasHeader && first.length >= 4 && isImageHeader(first[1]) && normalizeText(first[2] || "") === "commentaire";
+      const keepHeader = hasHeader && Boolean(sheetImportColumns(first));
       const startIndex = hasHeader ? 1 : 0;
       const cache = new Map<string, string>();
       const targets = rows
@@ -3300,14 +3316,14 @@ function rebuildContainersForAxes(
             <p className={cx("text-sm", T.mutedText)}>
               Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>,{" "}
               <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>,{" "}
-              <code>Nom;URL;Commentaire</code>. Une liste avec seulement les noms marche aussi : le bouton Wikipedia peut remplir les images manquantes. Google Sheets : collez un tableau avec{" "}<code>Nom | Image | Commentaire | Axe 1 | Axe 2...</code> en première ligne.
+              <code>Nom;URL;Commentaire</code>. Une liste avec seulement les noms marche aussi : le bouton Wikipedia peut remplir les images manquantes. Google Sheets : collez un tableau avec{" "}<code>Nom | Image | Axe 1 | Axe 2... | Commentaire</code> en première ligne. Dans un axe, <code>X</code> envoie la tuile dans À classer.
             </p>
             <Textarea
               className={cx("w-full resize-y", INPUT_DARK)}
               rows={6}
               value={pairsText}
               onChange={(e) => setPairsText(e.target.value)}
-              placeholder={`Ex. simple\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\n\nEx. Google Sheets\nNom\tImage\tCommentaire\tTalent\tStyle\nNekfeu\thttps://exemple.com/nekfeu.jpg\tNote perso\tExcellent\tStreet`}
+              placeholder={`Ex. simple\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\n\nEx. Google Sheets\nNom\tImage\tTalent\tStyle\tCommentaire\nNekfeu\thttps://exemple.com/nekfeu.jpg\tExcellent\tStreet\tNote perso\nPNL\t\tX\tPlanant\t`}
             />
             <div className="flex flex-wrap gap-2">
               <Button onClick={importPairs}>
