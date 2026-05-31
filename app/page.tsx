@@ -2166,7 +2166,11 @@ function rebuildContainersForAxes(
   const tileGap = 8;
   const cellPadding = 32;
   const cellMinWidth = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
-  const cellMinHeight = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
+  const cellMinHeightForCount = (count: number) => {
+    if (count <= 0) return 48;
+    const rows = Math.ceil(count / cellTileColumns);
+    return rows * state.tileSize + Math.max(0, rows - 1) * tileGap + cellPadding;
+  };
   const hUnclassifiedSize = Math.max(hAxis.unclassifiedSize || 150, cellMinWidth);
 
   const colsPx = visibleHTiers
@@ -2888,7 +2892,7 @@ function rebuildContainersForAxes(
                             moveToContainer(selectedId, id);
                           }}
                         >
-                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
+                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeightForCount(items.length) }} data-cell-id={id}>
                             {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -2944,7 +2948,7 @@ function rebuildContainersForAxes(
                             moveToContainer(selectedId, id);
                           }}
                         >
-                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
+                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeightForCount(items.length) }} data-cell-id={id}>
                             {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -3011,7 +3015,7 @@ function rebuildContainersForAxes(
                                 moveToContainer(selectedId, id);
                               }}
                             >
-                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
+                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeightForCount(items.length) }} data-cell-id={id}>
                                 {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -3067,7 +3071,7 @@ function rebuildContainersForAxes(
                                 moveToContainer(selectedId, id);
                               }}
                             >
-                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
+                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeightForCount(items.length) }} data-cell-id={id}>
                                 {items.map((itemId) => (
                               <Tile
                                 key={itemId}
