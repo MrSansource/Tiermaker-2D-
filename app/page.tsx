@@ -250,6 +250,21 @@ function buildTileLink(template: string, name: string) {
   return `${safeTemplate}${encodedName}`;
 }
 
+function shouldProxyImageUrl(value?: string) {
+  if (!value) return false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === "lookaside.fbsbx.com" || host === "lookaside.instagram.com";
+  } catch {
+    return false;
+  }
+}
+
+function displayImageUrl(value?: string) {
+  if (!value) return undefined;
+  return shouldProxyImageUrl(value) ? `/api/image-proxy?url=${encodeURIComponent(value)}` : value;
+}
+
 function splitImportLine(line: string) {
   if (line.includes("\t")) return line.split("\t").map(cell => cell.trim());
   if (line.includes(";")) return line.split(";").map(cell => cell.trim());
@@ -475,6 +490,7 @@ function Tile({
   const [draftName, setDraftName] = useState(name);
   const [draftImage, setDraftImage] = useState(image || "");
   const [imageFailed, setImageFailed] = useState(false);
+  const renderedImage = displayImageUrl(image);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const iconButtonCls = "absolute right-1 z-20 h-5 w-5 inline-flex items-center justify-center rounded-full bg-black/45 hover:bg-black/65 transition border border-white/25";
   const commitEdit = () => {
@@ -487,6 +503,10 @@ function Tile({
     setDraftImage(cleanImage);
     setIsEditingTile(false);
   };
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [image]);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -598,10 +618,10 @@ function Tile({
         </div>
       )}
 
-      {image && !imageFailed ? (
+      {renderedImage && !imageFailed ? (
         <>
           <img
-            src={image}
+            src={renderedImage}
             alt={name}
             referrerPolicy="no-referrer"
             loading="lazy"
