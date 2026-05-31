@@ -257,6 +257,18 @@ function splitImportLine(line: string) {
   return [line.trim()];
 }
 
+function clipboardRowsFromHtml(html: string) {
+  if (!html || typeof DOMParser === "undefined") return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const rows = Array.from(doc.querySelectorAll("tr"));
+  if (!rows.length) return "";
+  return rows.map(row =>
+    Array.from(row.querySelectorAll("th,td"))
+      .map(cell => (cell.textContent || "").replace(/\s+/g, " ").trim())
+      .join("\t")
+  ).join("\n");
+}
+
 function isNameHeader(value: string) {
   const clean = normalizeText(value.trim());
   return clean === "nom" || clean === "name" || clean === "tuile" || clean === "titre";
@@ -2159,6 +2171,9 @@ function rebuildContainersForAxes(
     const positions = state.items[id]?.axisPositions || {};
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
+  const importPreviewRows = pairsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const importPreviewHeaders = importPreviewRows.length ? splitImportLine(importPreviewRows[0]) : [];
+  const importPreviewColumns = sheetImportColumns(importPreviewHeaders);
 
   const poolCard = (
     <Card className={cx(isPoolPinned && "h-full min-h-0 flex flex-col")}>
@@ -3323,8 +3338,28 @@ function rebuildContainersForAxes(
               rows={6}
               value={pairsText}
               onChange={(e) => setPairsText(e.target.value)}
+              onPaste={(e) => {
+                const html = e.clipboardData.getData("text/html");
+                const tableText = clipboardRowsFromHtml(html);
+                if (!tableText) return;
+                e.preventDefault();
+                setPairsText(tableText);
+              }}
               placeholder={`Ex. simple\nNekfeu\thttps://exemple.com/nekfeu.jpg Un court commentaire\n\nEx. Google Sheets\nNom\tImage\tTalent\tStyle\tCommentaire\nNekfeu\thttps://exemple.com/nekfeu.jpg\tExcellent\tStreet\tNote perso\nPNL\t\tX\tPlanant\t`}
             />
+            {pairsText.trim() && (
+              <div className={cx("rounded-md border px-3 py-2 text-xs", T.cardBorder, T.mutedText)}>
+                Colonnes detectees : <strong className="text-zinc-100">{importPreviewHeaders.length || 1}</strong>
+                {importPreviewColumns ? (
+                  <>
+                    {" "} | Axes : <strong className="text-zinc-100">{importPreviewColumns.axisColumns.map(col => col.header || `Axe ${col.index}`).join(", ")}</strong>
+                    {importPreviewColumns.commentIndex >= 0 && <> | Commentaire : colonne {importPreviewColumns.commentIndex + 1}</>}
+                  </>
+                ) : (
+                  <> | Tableau Google Sheets non detecte</>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button onClick={importPairs}>
                 <Upload className="w-4 h-4 mr-2" />
