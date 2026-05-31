@@ -844,6 +844,7 @@ export default function TierList2D() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pairsText, setPairsText] = useState("");
   const [loadingWikiImages, setLoadingWikiImages] = useState(false);
+  const [loadingGoogleImages, setLoadingGoogleImages] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [seedInput, setSeedInput] = useState("");
@@ -1529,11 +1530,22 @@ function rebuildContainersForAxes(
     return typeof data?.imageUrl === "string" ? data.imageUrl : "";
   }
 
-  async function prefillWikipediaImages() {
+  async function findGoogleImage(name: string) {
+    const res = await fetch(`/api/google-image?q=${encodeURIComponent(name)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Recherche Google Images impossible");
+    return typeof data?.imageUrl === "string" ? data.imageUrl : "";
+  }
+
+  async function prefillMissingImages(
+    providerLabel: string,
+    findImage: (name: string) => Promise<string>,
+    setLoading: (loading: boolean) => void
+  ) {
     const lines = pairsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     if (!lines.length) return;
 
-    setLoadingWikiImages(true);
+    setLoading(true);
     try {
       const rows = lines.map(line => splitImportLine(line));
       const first = rows[0] || [];
@@ -1570,12 +1582,20 @@ function rebuildContainersForAxes(
       await Promise.all(workers);
       const outputRows = keepHeader ? rows : rows.slice(startIndex);
       setPairsText(outputRows.map(row => row.join("\t")).join("\n"));
-      alert(`Wikipedia : ${found} image${found > 1 ? "s" : ""} trouvée${found > 1 ? "s" : ""} sur ${done} ligne${done > 1 ? "s" : ""}.`);
+      alert(`${providerLabel} : ${found} image${found > 1 ? "s" : ""} trouvée${found > 1 ? "s" : ""} sur ${done} ligne${done > 1 ? "s" : ""}.`);
     } catch (e: any) {
-      alert(`Échec du pré-remplissage Wikipedia. ${e?.message || ""}`);
+      alert(`Échec du pré-remplissage ${providerLabel}. ${e?.message || ""}`);
     } finally {
-      setLoadingWikiImages(false);
+      setLoading(false);
     }
+  }
+
+  function prefillWikipediaImages() {
+    return prefillMissingImages("Wikipedia", findWikipediaImage, setLoadingWikiImages);
+  }
+
+  function prefillGoogleImages() {
+    return prefillMissingImages("Google Images", findGoogleImage, setLoadingGoogleImages);
   }
 
   function importPairs() {
@@ -2874,10 +2894,19 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingWikiImages || !pairsText.trim()}
+                disabled={loadingWikiImages || loadingGoogleImages || !pairsText.trim()}
                 onClick={prefillWikipediaImages}
               >
                 {loadingWikiImages ? "Recherche Wikipedia..." : "Pré-remplir images Wikipedia"}
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={loadingGoogleImages || loadingWikiImages || !pairsText.trim()}
+                onClick={prefillGoogleImages}
+                title="Utilise Google Custom Search. Variables Vercel requises : GOOGLE_CUSTOM_SEARCH_API_KEY et GOOGLE_CUSTOM_SEARCH_CX."
+              >
+                {loadingGoogleImages ? "Recherche Google..." : "Pré-remplir images Google"}
               </Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
                 <Trash2 className="w-4 h-4 mr-2" />
