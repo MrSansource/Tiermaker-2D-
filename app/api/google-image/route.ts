@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       q: query,
       searchType: "image",
       num: "1",
-      safe: "active",
+      safe: "off",
       hl: "fr",
       imgSize: "medium",
     });
