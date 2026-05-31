@@ -428,7 +428,7 @@ function chipCls(active: boolean) {
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
   isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
-  colorAxis, onColorCycle, tileLink,
+  colorAxis, onColorCycle, tileLink, onEdit,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -441,8 +441,23 @@ function Tile({
   colorAxis?: AxisDefinition | null;
   onColorCycle?: (id: string) => void;
   tileLink?: string | null;
+  onEdit?: (id: string, updates: { name?: string; image?: string }) => void;
 }) {
+  const [isEditingTile, setIsEditingTile] = useState(false);
+  const [draftName, setDraftName] = useState(name);
+  const [draftImage, setDraftImage] = useState(image || "");
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const iconButtonCls = "absolute right-1 z-20 h-5 w-5 inline-flex items-center justify-center rounded-full bg-black/45 hover:bg-black/65 transition border border-white/25";
+  const commitEdit = () => {
+    const clean = draftName.trim();
+    const cleanImage = draftImage.trim();
+    if (clean && (clean !== name || cleanImage !== (image || ""))) {
+      onEdit?.(id, { name: clean, image: cleanImage });
+    }
+    setDraftName(clean || name);
+    setDraftImage(cleanImage);
+    setIsEditingTile(false);
+  };
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -501,6 +516,59 @@ function Tile({
       {...attributes}
       {...listeners}
     >
+      {isEditingTile && (
+        <div
+          className="absolute inset-1 z-40 flex flex-col items-stretch justify-center gap-1 rounded-xl bg-black/80 p-1"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            className="w-full rounded-md border border-white/35 bg-zinc-950/90 px-2 py-1 text-center text-xs font-semibold text-white outline-none"
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") {
+                setDraftName(name);
+                setDraftImage(image || "");
+                setIsEditingTile(false);
+              }
+            }}
+          />
+          <input
+            className="w-full rounded-md border border-white/25 bg-zinc-950/90 px-2 py-1 text-[10px] text-white outline-none placeholder:text-zinc-500"
+            value={draftImage}
+            placeholder="URL image"
+            onChange={(e) => setDraftImage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") {
+                setDraftName(name);
+                setDraftImage(image || "");
+                setIsEditingTile(false);
+              }
+            }}
+          />
+          <div className="flex justify-center gap-1">
+            <button type="button" className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-900" onClick={commitEdit}>
+              OK
+            </button>
+            <button
+              type="button"
+              className="rounded border border-white/30 px-2 py-0.5 text-[10px] text-white"
+              onClick={() => {
+                setDraftName(name);
+                setDraftImage(image || "");
+                setIsEditingTile(false);
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
       {image ? (
         <>
           <img
@@ -539,10 +607,10 @@ function Tile({
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
-          className="absolute top-8 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
+          className={cx(iconButtonCls, "top-7")}
           title="Informations de classement"
         >
-          <span className="text-xs font-bold text-white">i</span>
+          <span className="text-[11px] font-bold text-white">i</span>
         </button>
       )}
 
@@ -573,23 +641,38 @@ function Tile({
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onColorCycle?.(id); }}
-          className="absolute bottom-1 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition border border-white/30"
+          className={cx(iconButtonCls, "bottom-1")}
           style={colorFrame ? { backgroundColor: colorFrame.color, color: textColorForBg(colorFrame.color) } : undefined}
           title={`Changer ${colorAxis.label}`}
         >
-          <Palette className="h-3.5 w-3.5" />
+          <Palette className="h-3 w-3" />
         </button>
       )}
+
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setDraftName(name);
+          setDraftImage(image || "");
+          setIsEditingTile(true);
+        }}
+        className={cx(iconButtonCls, "bottom-7")}
+        title="Modifier la tuile"
+      >
+        <Edit className="h-3 w-3 text-zinc-100" />
+      </button>
 
       {comment && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onCommentToggle?.(id); }}
-          className="absolute top-1 right-1 z-20 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition"
+          className={cx(iconButtonCls, "top-1 border-transparent")}
           title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
         >
-          {isCommentOpen ? <X className="h-3.5 w-3.5 text-zinc-100" /> : <MessageSquare className="h-3.5 w-3.5 text-zinc-100" />}
+          {isCommentOpen ? <X className="h-3 w-3 text-zinc-100" /> : <MessageSquare className="h-3 w-3 text-zinc-100" />}
         </button>
       )}
     </motion.div>
@@ -1226,6 +1309,26 @@ function rebuildContainersForAxes(
     });
     if (selectedId === id) setSelectedId(null);
     if (openCommentId === id) setOpenCommentId(null);
+  }
+
+  function updateItemDetails(id: string, updates: { name?: string; image?: string }) {
+    setState((prev) => {
+      const item = prev.items[id];
+      if (!item) return prev;
+      const name = updates.name?.trim() || item.name;
+      const image = updates.image?.trim() || undefined;
+      return {
+        ...prev,
+        items: {
+          ...prev.items,
+          [id]: {
+            ...item,
+            name,
+            image,
+          },
+        },
+      };
+    });
   }
 
   function deletePoolItems() {
@@ -2091,6 +2194,7 @@ function rebuildContainersForAxes(
                           colorAxis={colorAxis}
                           onColorCycle={cycleColorAxisPosition}
                           tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                           showInfo={showInfoId === itemId}
                           onInfoToggle={(id) => {
                             setOpenCommentId(null);
@@ -2676,6 +2780,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2731,6 +2836,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2797,6 +2903,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2852,6 +2959,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -2968,6 +3076,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(itemId)}
+                          onEdit={updateItemDetails}
                                 showInfo={showInfoId === itemId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
@@ -3126,6 +3235,7 @@ function rebuildContainersForAxes(
                                 colorAxis={colorAxis}
                                 onColorCycle={cycleColorAxisPosition}
                                 tileLink={getTileLink(activeId)}
+                                onEdit={updateItemDetails}
                                 showInfo={showInfoId === activeId}
                                 onInfoToggle={(id) => {
                                   setOpenCommentId(null);
