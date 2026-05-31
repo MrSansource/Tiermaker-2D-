@@ -831,8 +831,7 @@ function Droppable({ id, children, onClick }: { id: string; children: React.Reac
         if (target.closest('[data-item-id]')) return;
         onClick?.();
       }}
-      className={cx("min-h-[120px] rounded-md", isOver && "ring-2 ring-indigo-500/60", DARK.cardBg)}
-      style={{ touchAction: "none" }}
+      className={cx("min-h-[48px] rounded-md", isOver && "ring-2 ring-indigo-500/60", DARK.cardBg)}
     >
       {children}
     </div>
@@ -1056,10 +1055,19 @@ export default function TierList2D() {
   const [commentPanelPosition, setCommentPanelPosition] = useState({ x: 0, y: 0 });
   const commentRef = useRef<HTMLDivElement | null>(null);
   const appRootRef = useRef<HTMLDivElement | null>(null);
+  const [isMobileView, setIsMobileView] = useState(false);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileView(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   const vAxis = state.axes.find(a => a.id === state.activeVerticalAxisId) || state.axes[0];
   const hAxis = state.axes.find(a => a.id === state.activeHorizontalAxisId) || state.axes[1] || state.axes[0];
@@ -2147,11 +2155,14 @@ function rebuildContainersForAxes(
   const vUnclassifiedSize = vAxis.unclassifiedSize || 150;
   const tileGap = 8;
   const cellPadding = 32;
-  const cellMinWidth = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
+  const boardTileSize = isMobileView ? Math.min(state.tileSize, 72) : state.tileSize;
+  const boardCellTileColumns = isMobileView ? Math.min(cellTileColumns, 2) : cellTileColumns;
+  const rowLabelColumn = isMobileView ? "92px" : "minmax(140px, max-content)";
+  const cellMinWidth = boardCellTileColumns * boardTileSize + Math.max(0, boardCellTileColumns - 1) * tileGap + cellPadding;
   const cellMinHeightForCount = (count: number) => {
     if (count <= 0) return 48;
-    const rows = Math.ceil(count / cellTileColumns);
-    return rows * state.tileSize + Math.max(0, rows - 1) * tileGap + cellPadding;
+    const rows = Math.ceil(count / boardCellTileColumns);
+    return rows * boardTileSize + Math.max(0, rows - 1) * tileGap + cellPadding;
   };
   const hUnclassifiedSize = Math.max(hAxis.unclassifiedSize || 150, cellMinWidth);
 
@@ -2160,7 +2171,7 @@ function rebuildContainersForAxes(
     .join(" ");
 
   const gridTemplate: React.CSSProperties = {
-    gridTemplateColumns: `minmax(140px, max-content) ${hUnclassifiedSize}px ${colsPx}`,
+    gridTemplateColumns: `${rowLabelColumn} ${hUnclassifiedSize}px ${colsPx}`,
   };
 
   const poolIds = state.containers[state.poolId] || [];
@@ -2188,7 +2199,7 @@ function rebuildContainersForAxes(
   const isImagePrefillLoading = loadingWikiImages || loadingPinterestImages || loadingBrightDataImages;
 
   const poolCard = (
-    <Card className={cx(isPoolPinned && "h-full min-h-0 flex flex-col")}>
+    <Card className={cx(isPoolPinned && "lg:h-full lg:min-h-0 lg:flex lg:flex-col")}>
       <CardHeader className="flex items-center justify-between gap-3">
         <CardTitle>Bac (non classés)</CardTitle>
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -2246,7 +2257,7 @@ function rebuildContainersForAxes(
           </Button>
         </div>
       </CardHeader>
-      <CardContent className={cx(T.cardBg, isPoolPinned && "min-h-0 flex-1 overflow-auto")}>
+      <CardContent className={cx(T.cardBg, isPoolPinned && "lg:min-h-0 lg:flex-1 lg:overflow-auto")}>
         <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
           <Droppable id={state.poolId}>
             <div
@@ -2270,7 +2281,7 @@ function rebuildContainersForAxes(
                           name={state.items[itemId]?.name ?? itemId}
                           image={state.items[itemId]?.image}
                           comment={state.items[itemId]?.comment}
-                          tileSize={state.tileSize}
+                          tileSize={boardTileSize}
                           selected={selectedId === itemId}
                           highlighted={matchedIds.has(itemId)}
                           onClick={() => setSelectedId(itemId)}
@@ -2307,9 +2318,9 @@ function rebuildContainersForAxes(
 
  return (
     <div ref={appRootRef} className={cx("min-h-screen", T.pageBg, T.pageText)}>
-      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Tier list 2D — {state.categoryLabel}</h1>
+      <div className="max-w-7xl mx-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <h1 className="text-xl font-bold leading-tight md:text-3xl">Tier list 2D — {state.categoryLabel}</h1>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
@@ -2765,7 +2776,7 @@ function rebuildContainersForAxes(
                 Supprimer la tuile
               </Button>
               <div className="w-px h-6 bg-zinc-700 mx-1" />
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex min-w-[220px] flex-1 items-center gap-2 text-sm sm:flex-none">
                 Taille tuiles
                 <input
                   type="range"
@@ -2774,11 +2785,11 @@ function rebuildContainersForAxes(
                   step={4}
                   value={state.tileSize}
                   onChange={(e) => setState(s => ({ ...s, tileSize: Number(e.target.value) }))}
-                  className="w-28"
+                  className="min-w-0 flex-1 sm:w-28"
                 />
-                <span className="w-8 text-xs text-zinc-400">{state.tileSize}</span>
+                <span className="w-8 text-xs text-zinc-400">{boardTileSize}</span>
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex min-w-[220px] flex-1 items-center gap-2 text-sm sm:flex-none">
                 Largeur case
                 <input
                   type="range"
@@ -2787,9 +2798,9 @@ function rebuildContainersForAxes(
                   step={1}
                   value={cellTileColumns}
                   onChange={(e) => setCellTileColumns(Number(e.target.value))}
-                  className="w-28"
+                  className="min-w-0 flex-1 sm:w-28"
                 />
-                <span className="w-5 text-xs text-zinc-400">{cellTileColumns}</span>
+                <span className="w-5 text-xs text-zinc-400">{boardCellTileColumns}</span>
               </label>
             </div>
           </CardContent>
@@ -2801,12 +2812,12 @@ function rebuildContainersForAxes(
               isPoolPinned && poolSplitSide
                 ? "grid gap-4 lg:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] lg:h-[calc(100vh-1.5rem)] lg:min-h-[620px]"
                 : isPoolPinned
-                  ? "grid gap-4 h-[calc(100vh-1.5rem)] min-h-[620px] grid-rows-[minmax(0,2fr)_minmax(240px,1fr)]"
+                  ? "grid gap-4 lg:h-[calc(100vh-1.5rem)] lg:min-h-[620px] lg:grid-rows-[minmax(0,2fr)_minmax(240px,1fr)]"
                   : "space-y-6"
             )}
           >
             <div className={cx(
-              isPoolPinned && "min-h-0 flex flex-col gap-4 pr-1 overflow-hidden",
+              isPoolPinned && "flex flex-col gap-4 lg:min-h-0 lg:pr-1 lg:overflow-hidden",
               isPoolPinned && poolSplitSide && "lg:order-2"
             )}>
           {colorAxis && (
@@ -2826,7 +2837,7 @@ function rebuildContainersForAxes(
             </div>
           )}
 
-          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder, isPoolPinned && "min-h-0 flex-1")}>
+          <div className={cx("overflow-x-auto rounded-2xl border overscroll-x-contain", T.cardBg, T.cardBorder, isPoolPinned && "lg:min-h-0 lg:flex-1 lg:overflow-auto")}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
               <div />
               
@@ -2883,7 +2894,7 @@ function rebuildContainersForAxes(
                                 name={state.items[itemId]?.name ?? itemId}
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -2939,7 +2950,7 @@ function rebuildContainersForAxes(
                                 name={state.items[itemId]?.name ?? itemId}
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3006,7 +3017,7 @@ function rebuildContainersForAxes(
                                 name={state.items[itemId]?.name ?? itemId}
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3062,7 +3073,7 @@ function rebuildContainersForAxes(
                                 name={state.items[itemId]?.name ?? itemId}
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3179,7 +3190,7 @@ function rebuildContainersForAxes(
                                 name={state.items[itemId]?.name ?? itemId}
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3209,7 +3220,7 @@ function rebuildContainersForAxes(
             </div>
 
             <div className={cx(
-              isPoolPinned && "min-h-0 overflow-hidden",
+              isPoolPinned && "lg:min-h-0 lg:overflow-hidden",
               isPoolPinned && poolSplitSide && "lg:order-1"
             )}>
               {isPoolPinned ? poolCard : null}
@@ -3341,7 +3352,7 @@ function rebuildContainersForAxes(
                                 name={state.items[activeId]?.name ?? ""}
                                 image={state.items[activeId]?.image}
                                 comment={state.items[activeId]?.comment}
-                                tileSize={state.tileSize}
+                                tileSize={boardTileSize}
                                 isCommentOpen={openCommentId === activeId}
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[activeId]?.axisPositions}
