@@ -227,13 +227,27 @@ function splitImportLine(line: string) {
   return [line.trim()];
 }
 
+function isNameHeader(value: string) {
+  const clean = normalizeText(value.trim());
+  return clean === "nom" || clean === "name" || clean === "tuile" || clean === "titre";
+}
+
+function isImageHeader(value: string) {
+  const clean = normalizeText(value.trim());
+  return clean === "image" || clean === "url" || clean === "lien" || clean === "image url";
+}
+
+function isImageUrl(value?: string) {
+  return /^https?:\/\/\S+/i.test((value || "").trim());
+}
+
 function looksLikeSheetImport(text: string) {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (lines.length < 2) return false;
   const headers = splitImportLine(lines[0]).map(normalizeText);
   return headers.length >= 4 &&
     headers[0] === "nom" &&
-    (headers[1] === "image" || headers[1] === "url" || headers[1] === "lien") &&
+    isImageHeader(headers[1]) &&
     headers[2] === "commentaire";
 }
 
@@ -829,6 +843,7 @@ export default function TierList2D() {
   const [state, setState] = useState<AppState>(initialState);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pairsText, setPairsText] = useState("");
+  const [loadingWikiImages, setLoadingWikiImages] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [seedInput, setSeedInput] = useState("");
@@ -1504,6 +1519,61 @@ function rebuildContainersForAxes(
       alert(`Échec chargement du seed. ${e?.message || ''}`);
     } finally {
       setLoadingSeed(false);
+    }
+  }
+
+  async function findWikipediaImage(name: string) {
+    const res = await fetch(`/api/wiki-image?q=${encodeURIComponent(name)}`);
+    if (!res.ok) return "";
+    const data = await res.json();
+    return typeof data?.imageUrl === "string" ? data.imageUrl : "";
+  }
+
+  async function prefillWikipediaImages() {
+    const lines = pairsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!lines.length) return;
+
+    setLoadingWikiImages(true);
+    try {
+      const rows = lines.map(line => splitImportLine(line));
+      const first = rows[0] || [];
+      const hasHeader = first.length > 0 && isNameHeader(first[0]);
+      const keepHeader = hasHeader && first.length >= 4 && isImageHeader(first[1]) && normalizeText(first[2] || "") === "commentaire";
+      const startIndex = hasHeader ? 1 : 0;
+      const cache = new Map<string, string>();
+      const targets = rows
+        .map((row, index) => ({ row, index, name: (row[0] || "").trim() }))
+        .filter(({ row, index, name }) => index >= startIndex && name && !isImageUrl(row[1]));
+
+      let found = 0;
+      let done = 0;
+      const workers = Array.from({ length: Math.min(4, targets.length) }, async () => {
+        while (targets.length) {
+          const target = targets.shift();
+          if (!target) return;
+          const cacheKey = normalizeText(target.name);
+          let imageUrl = cache.get(cacheKey);
+          if (imageUrl === undefined) {
+            imageUrl = await findWikipediaImage(target.name);
+            cache.set(cacheKey, imageUrl);
+          }
+          done += 1;
+          if (!imageUrl) continue;
+
+          while (target.row.length < 2) target.row.push("");
+          target.row[1] = imageUrl;
+          found += 1;
+        }
+      });
+
+      await Promise.all(workers);
+      const outputRows = keepHeader ? rows : rows.slice(startIndex);
+      setPairsText(outputRows.map(row => row.join("\t")).join("\n"));
+      alert(`Wikipedia : ${found} image${found > 1 ? "s" : ""} trouvée${found > 1 ? "s" : ""} sur ${done} ligne${done > 1 ? "s" : ""}.`);
+    } catch (e: any) {
+      alert(`Échec du pré-remplissage Wikipedia. ${e?.message || ""}`);
+    } finally {
+      setLoadingWikiImages(false);
     }
   }
 
@@ -2786,7 +2856,7 @@ function rebuildContainersForAxes(
             <p className={cx("text-sm", T.mutedText)}>
               Une ligne par artiste. Formats acceptés : <code>Nom    URL    Commentaire</code>,{" "}
               <code>Nom | URL | Commentaire</code>, <code>Nom,URL,Commentaire</code>,{" "}
-              <code>Nom;URL;Commentaire</code>. Google Sheets : collez un tableau avec{" "}<code>Nom | Image | Commentaire | Axe 1 | Axe 2...</code> en première ligne.
+              <code>Nom;URL;Commentaire</code>. Une liste avec seulement les noms marche aussi : le bouton Wikipedia peut remplir les images manquantes. Google Sheets : collez un tableau avec{" "}<code>Nom | Image | Commentaire | Axe 1 | Axe 2...</code> en première ligne.
             </p>
             <Textarea
               className={cx("w-full resize-y", INPUT_DARK)}
@@ -2799,6 +2869,14 @@ function rebuildContainersForAxes(
               <Button onClick={importPairs}>
                 <Upload className="w-4 h-4 mr-2" />
                 Importer
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={loadingWikiImages || !pairsText.trim()}
+                onClick={prefillWikipediaImages}
+              >
+                {loadingWikiImages ? "Recherche Wikipedia..." : "Pré-remplir images Wikipedia"}
               </Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
                 <Trash2 className="w-4 h-4 mr-2" />
