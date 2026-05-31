@@ -1751,7 +1751,7 @@ function rebuildContainersForAxes(
           const cacheKey = normalizeText(target.name);
           let imageUrl = cache.get(cacheKey) || "";
           if (!cache.has(cacheKey)) {
-            const fetchedImageUrl = await findWikipediaImage(target.name) || "";
+            const fetchedImageUrl = await findImage(target.name) || "";
             cache.set(cacheKey, fetchedImageUrl);
             imageUrl = fetchedImageUrl;
           }
