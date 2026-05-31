@@ -2144,7 +2144,7 @@ function rebuildContainersForAxes(
 
   const vUnclassifiedSize = vAxis.unclassifiedSize || 150;
   const tileGap = 8;
-  const cellPadding = 16;
+  const cellPadding = 32;
   const cellMinWidth = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
   const cellMinHeight = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
   const hUnclassifiedSize = Math.max(hAxis.unclassifiedSize || 150, cellMinWidth);
@@ -2772,7 +2772,7 @@ function rebuildContainersForAxes(
                 <span className="w-8 text-xs text-zinc-400">{state.tileSize}</span>
               </label>
               <label className="flex items-center gap-2 text-sm">
-                Par case
+                Largeur case
                 <input
                   type="range"
                   min={2}
@@ -2782,7 +2782,7 @@ function rebuildContainersForAxes(
                   onChange={(e) => setCellTileColumns(Number(e.target.value))}
                   className="w-28"
                 />
-                <span className="w-10 text-xs text-zinc-400">{cellTileColumns}x{cellTileColumns}</span>
+                <span className="w-5 text-xs text-zinc-400">{cellTileColumns}</span>
               </label>
             </div>
           </CardContent>
