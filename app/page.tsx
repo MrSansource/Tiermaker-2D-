@@ -845,6 +845,8 @@ export default function TierList2D() {
   const [pairsText, setPairsText] = useState("");
   const [loadingWikiImages, setLoadingWikiImages] = useState(false);
   const [loadingGoogleImages, setLoadingGoogleImages] = useState(false);
+  const [isPoolPinned, setIsPoolPinned] = useState(false);
+  const [poolSplitSide, setPoolSplitSide] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [seedInput, setSeedInput] = useState("");
@@ -1889,6 +1891,106 @@ function rebuildContainersForAxes(
     return Object.values(positions).some(v => v === UNCLASSIFIED_INDEX);
   }).length;
 
+  const poolCard = (
+    <Card className={cx(isPoolPinned && "h-full min-h-0 flex flex-col")}>
+      <CardHeader className="flex items-center justify-between gap-3">
+        <CardTitle>Bac (non classés)</CardTitle>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <label className="flex items-center gap-1 text-xs">
+            <input
+              type="checkbox"
+              checked={isPoolPinned}
+              onChange={(e) => setIsPoolPinned(e.target.checked)}
+            />
+            Figer le bac
+          </label>
+          <label className="flex items-center gap-1 text-xs">
+            <input
+              type="checkbox"
+              checked={poolSplitSide}
+              disabled={!isPoolPinned}
+              onChange={(e) => setPoolSplitSide(e.target.checked)}
+            />
+            Gauche / droite
+          </label>
+          {partialCount > 0 && (
+            <Button
+              variant="outline"
+              className={OUTLINE_DARK}
+              size="sm"
+              onClick={() => setShowPartialOnly(v => !v)}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              {showPartialOnly ? `Tous (${poolIds.length})` : `Partiels (${partialCount})`}
+            </Button>
+          )}
+          {showAlphaNav && (
+            <>
+              <button className={chipCls(poolAlpha === null)} onClick={() => setPoolAlpha(null)}>Tous</button>
+              {ALPHA_BUCKETS.map((k) => (
+                <button
+                  key={k}
+                  className={chipCls(poolAlpha === k)}
+                  onClick={() => setPoolAlpha(prev => prev === k ? null : k)}
+                >
+                  {k === "Autres" ? "Autres" : `${k[0]}-${k[1]}`}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className={cx(T.cardBg, isPoolPinned && "min-h-0 flex-1 overflow-auto")}>
+        <SortableContext items={alphaFilteredPoolIds} strategy={rectSortingStrategy}>
+          <Droppable id={state.poolId}>
+            <div
+              data-pool-root="1"
+              className="flex flex-wrap gap-2 p-2"
+              onClick={(e) => {
+                if ((e.target as HTMLElement)?.closest?.("[data-item-id]")) return;
+                if (!selectedId) return;
+                const currentContainer = getContainerByItem(selectedId);
+                if (currentContainer === state.poolId) {
+                  setSelectedId(null);
+                  return;
+                }
+                moveToContainer(selectedId, state.poolId);
+              }}
+            >
+              {alphaFilteredPoolIds.map((itemId) => (
+                        <Tile
+                          key={itemId}
+                          id={itemId}
+                          name={state.items[itemId]?.name ?? itemId}
+                          image={state.items[itemId]?.image}
+                          comment={state.items[itemId]?.comment}
+                          tileSize={state.tileSize}
+                          selected={selectedId === itemId}
+                          highlighted={matchedIds.has(itemId)}
+                          onClick={() => setSelectedId(itemId)}
+                          isCommentOpen={openCommentId === itemId}
+                          onCommentToggle={toggleCommentFor}
+                          axisPositions={state.items[itemId]?.axisPositions}
+                          axes={state.axes}
+                          colorFrame={getColorFrame(itemId)}
+                          colorAxis={colorAxis}
+                          onColorCycle={cycleColorAxisPosition}
+                          tileLink={getTileLink(itemId)}
+                          showInfo={showInfoId === itemId}
+                          onInfoToggle={(id) => {
+                            setOpenCommentId(null);
+                            setIsEditingComment(false);
+                            setShowInfoId(prev => prev === id ? null : id);
+                          }}
+                            />
+              ))}
+            </div>
+          </Droppable>
+        </SortableContext>
+      </CardContent>
+    </Card>
+  );
+
   const filteredCategories = categorySearch.trim()
     ? categories.filter(category =>
         normalizeText(category.label).includes(normalizeText(categorySearch)) ||
@@ -2360,6 +2462,16 @@ function rebuildContainersForAxes(
         </Card>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} modifiers={[restrictToWindowEdges]}>
+          <div
+            className={cx(
+              isPoolPinned && poolSplitSide
+                ? "grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] lg:h-[calc(100vh-1.5rem)] lg:min-h-[620px]"
+                : isPoolPinned
+                  ? "grid gap-4 h-[calc(100vh-1.5rem)] min-h-[620px] grid-rows-[minmax(0,2fr)_minmax(240px,1fr)]"
+                  : "space-y-6"
+            )}
+          >
+            <div className={cx(isPoolPinned && "min-h-0 overflow-auto space-y-6 pr-1")}>
           {colorAxis && (
             <div className={cx("rounded-2xl border p-3", T.cardBg, T.cardBorder)}>
               <div className="flex flex-wrap items-center gap-3">
@@ -2643,10 +2755,28 @@ function rebuildContainersForAxes(
             </div>
           </div>
 
+          {!isPoolPinned && (
           <Card>
             <CardHeader className="flex items-center justify-between">
               <CardTitle>Bac (non classés)</CardTitle>
               <div className="flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={isPoolPinned}
+                    onChange={(e) => setIsPoolPinned(e.target.checked)}
+                  />
+                  Figer le bac
+                </label>
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={poolSplitSide}
+                    disabled={!isPoolPinned}
+                    onChange={(e) => setPoolSplitSide(e.target.checked)}
+                  />
+                  Gauche / droite
+                </label>
                 {partialCount > 0 && (
                   <Button
                     variant="outline"
@@ -2723,6 +2853,13 @@ function rebuildContainersForAxes(
               </SortableContext>
             </CardContent>
           </Card>
+          )}
+            </div>
+
+            <div className={cx(isPoolPinned && "min-h-0 overflow-hidden")}>
+              {isPoolPinned ? poolCard : null}
+            </div>
+          </div>
 
           {openCommentId && (
             <div
