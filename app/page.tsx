@@ -153,6 +153,36 @@ function normalizeText(s: string) {
   return s.toLowerCase().normalize("NFD").replace(COMBINING_MARKS_RE, "");
 }
 
+function mergeTextField(existing?: string, incoming?: string) {
+  const clean = (incoming || "").trim();
+  return clean || existing;
+}
+
+function itemNameKey(name: string) {
+  return normalizeText(name).trim();
+}
+
+function itemIdForName(name: string, items: Record<string, Item>) {
+  const key = itemNameKey(name);
+  for (const [id, item] of Object.entries(items)) {
+    if (itemNameKey(item.name) === key) return id;
+  }
+  return null;
+}
+
+function mergeAxisPositions(
+  existing: Record<string, number | null>,
+  incoming: Record<string, number | null>
+) {
+  const merged = { ...existing };
+  for (const [axisId, position] of Object.entries(incoming)) {
+    if (merged[axisId] === undefined || merged[axisId] === null) {
+      merged[axisId] = position;
+    }
+  }
+  return merged;
+}
+
 const collator = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true, numeric: true });
 function sortIdsAlpha(ids: string[], items: Record<string, Item>) {
   return [...ids].sort((a, b) => collator.compare(
@@ -1607,14 +1637,41 @@ function rebuildContainersForAxes(
 
       const activeVerticalAxisId = sheet.axes[0].id;
       const activeHorizontalAxisId = sheet.axes[1].id;
+      const currentByName = new Map(
+        Object.entries(state.items).map(([id, item]) => [itemNameKey(item.name), { id, item }])
+      );
+      const importedItems: Record<string, Item> = {};
+      const idMap: Record<string, string> = {};
+
+      for (const importedId of sheet.allIds) {
+        const incoming = sheet.items[importedId];
+        const existing = currentByName.get(itemNameKey(incoming.name));
+        const finalId = existing?.id || importedId;
+        idMap[importedId] = finalId;
+        importedItems[finalId] = existing
+          ? {
+              ...existing.item,
+              name: existing.item.name || incoming.name,
+              image: mergeTextField(existing.item.image, incoming.image),
+              comment: mergeTextField(existing.item.comment, incoming.comment),
+              axisPositions: mergeAxisPositions(existing.item.axisPositions, incoming.axisPositions),
+            }
+          : { ...incoming, id: finalId };
+      }
+
+      const importedIdSet = new Set(Object.values(idMap));
+      const items = {
+        ...Object.fromEntries(Object.entries(state.items).filter(([id]) => !importedIdSet.has(id))),
+        ...importedItems,
+      };
       const containers = rebuildContainersForAxes(
-        sheet.items,
+        items,
         activeVerticalAxisId,
         activeHorizontalAxisId,
         sheet.axes[0].tiers.length,
         sheet.axes[1].tiers.length
       );
-      containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID] || [], sheet.items);
+      containers[POOL_ID] = sortIdsAlpha(containers[POOL_ID] || [], items);
 
       setPairsText("");
       setState((s) => ({
@@ -1623,7 +1680,7 @@ function rebuildContainersForAxes(
         activeVerticalAxisId,
         activeHorizontalAxisId,
         activeColorAxisId: sheet.axes[2]?.id || null,
-        items: sheet.items,
+        items,
         containers,
       }));
       return;
@@ -1634,6 +1691,16 @@ function rebuildContainersForAxes(
     const items = { ...state.items };
     const pool = [...(state.containers[state.poolId] || [])];
     for (const { name, image, comment } of entries) {
+      const existingId = itemIdForName(name, items);
+      if (existingId && items[existingId]) {
+        items[existingId] = {
+          ...items[existingId],
+          image: mergeTextField(items[existingId].image, image),
+          comment: mergeTextField(items[existingId].comment, comment),
+        };
+        continue;
+      }
+
       const base = slug(name) || Math.random().toString(36).slice(2);
       const uid = items[base] ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
       items[uid] = {
