@@ -70,6 +70,7 @@ type CategorySummary = {
 
 const POOL_ID = "__pool__";
 const UNCLASSIFIED_INDEX = -1;
+const TIER_DRAG_PREFIX = "__tier__";
 const DEFAULT_CATEGORY_LABEL = "Rap français";
 const DEFAULT_CATEGORY_SLUG = "rap-francais";
 const DEFAULT_TILE_LINK_TEMPLATE = "https://www.google.com/search?q={name}";
@@ -198,6 +199,18 @@ function parsePairs(text: string): Array<{ name: string; image?: string; comment
     }
   }
   return out;
+}
+
+function tierDragId(axisId: string, tierIndex: number) {
+  return `${TIER_DRAG_PREFIX}:${axisId}:${tierIndex}`;
+}
+
+function parseTierDragId(id: string) {
+  if (!id.startsWith(`${TIER_DRAG_PREFIX}:`)) return null;
+  const [, axisId, index] = id.split(":");
+  const tierIndex = Number(index);
+  if (!axisId || !Number.isInteger(tierIndex)) return null;
+  return { axisId, tierIndex };
 }
 
 function buildTileLink(template: string, name: string) {
@@ -536,6 +549,40 @@ function Tile({
         </button>
       )}
     </motion.div>
+  );
+}
+
+function SortableTierHeader({
+  id,
+  label,
+  color,
+  className,
+}: {
+  id: string;
+  label: string;
+  color: string;
+  className?: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    backgroundColor: color,
+    color: textColorForBg(color),
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.7 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cx(className, "cursor-grab active:cursor-grabbing select-none")}
+      style={style}
+      title="Glisser pour reordonner"
+      {...attributes}
+      {...listeners}
+    >
+      {label}
+    </div>
   );
 }
 
@@ -1094,6 +1141,57 @@ function rebuildContainersForAxes(
     if (openCommentId === id) setOpenCommentId(null);
   }
 
+  function moveTierInAxis(axisId: string, fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    setState((prev) => {
+      const axis = prev.axes.find(a => a.id === axisId);
+      if (!axis || !axis.tiers[fromIndex] || !axis.tiers[toIndex]) return prev;
+
+      const oldOrder = axis.tiers.map((_, index) => index);
+      const newOrder = arrayMove(oldOrder, fromIndex, toIndex);
+      const oldToNew = new Map<number, number>();
+      newOrder.forEach((oldIndex, newIndex) => oldToNew.set(oldIndex, newIndex));
+
+      const axes = prev.axes.map(a => {
+        if (a.id !== axisId) return a;
+        return {
+          ...a,
+          tiers: arrayMove(a.tiers, fromIndex, toIndex),
+          tierWidths: a.tierWidths ? arrayMove(a.tierWidths, fromIndex, toIndex) : a.tierWidths,
+        };
+      });
+
+      const items: Record<string, Item> = {};
+      for (const [id, item] of Object.entries(prev.items)) {
+        const pos = item.axisPositions[axisId];
+        items[id] = pos === null || pos < 0 || !oldToNew.has(pos)
+          ? item
+          : {
+              ...item,
+              axisPositions: {
+                ...item.axisPositions,
+                [axisId]: oldToNew.get(pos)!,
+              },
+            };
+      }
+
+      let containers = prev.containers;
+      if (axisId === prev.activeVerticalAxisId || axisId === prev.activeHorizontalAxisId) {
+        const nextVAxis = axes.find(a => a.id === prev.activeVerticalAxisId)!;
+        const nextHAxis = axes.find(a => a.id === prev.activeHorizontalAxisId)!;
+        containers = rebuildContainersForAxes(
+          items,
+          prev.activeVerticalAxisId,
+          prev.activeHorizontalAxisId,
+          nextVAxis.tiers.length,
+          nextHAxis.tiers.length
+        );
+      }
+
+      return { ...prev, axes, items, containers };
+    });
+  }
+
   function handleDragStart(event: any) {
     setActiveId(event.active?.id ?? null);
   }
@@ -1102,6 +1200,7 @@ function rebuildContainersForAxes(
     const { active, over } = event;
     if (!over) return;
     const activeId = active.id as string;
+    if (parseTierDragId(activeId)) return;
     const overId = over.id as string;
     setState((prev) => {
       const sourceContainer = getContainerByItem(activeId, prev.containers);
@@ -1118,6 +1217,14 @@ function rebuildContainersForAxes(
     if (!over) return;
     const activeId = active.id as string;
     const overId = over.id as string;
+    const activeTier = parseTierDragId(activeId);
+    const overTier = parseTierDragId(overId);
+    if (activeTier) {
+      if (overTier && activeTier.axisId === overTier.axisId) {
+        moveTierInAxis(activeTier.axisId, activeTier.tierIndex, overTier.tierIndex);
+      }
+      return;
+    }
     setState((prev) => {
       const sourceContainer = getContainerByItem(activeId, prev.containers);
       const destContainer = getContainerFromOverId(overId, prev.containers);
@@ -2151,15 +2258,17 @@ function rebuildContainersForAxes(
               >
                 À classer
               </div>
-              {visibleHTiers.map(({ tier, index }) => (
-                <div
-                  key={`colh-${index}`}
-                  className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
-                  style={{ backgroundColor: tier.color, color: textColorForBg(tier.color) }}
-                >
-                  {tier.label}
-                </div>
-              ))}
+              <SortableContext items={visibleHTiers.map(({ index }) => tierDragId(hAxis.id, index))} strategy={rectSortingStrategy}>
+                {visibleHTiers.map(({ tier, index }) => (
+                  <SortableTierHeader
+                    key={`colh-${index}`}
+                    id={tierDragId(hAxis.id, index)}
+                    label={tier.label}
+                    color={tier.color}
+                    className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                  />
+                ))}
+              </SortableContext>
 
               <div
                 className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
@@ -2278,14 +2387,15 @@ function rebuildContainersForAxes(
                 );
               })}
 
-              {visibleVTiers.map(({ tier: rowTier, index: ri }) => (
-               <React.Fragment key={`row-${ri}`}>
-                  <div
-                    className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
-                    style={{ backgroundColor: rowTier.color, color: textColorForBg(rowTier.color) }}
-                  >
-                    {rowTier.label}
-                  </div>
+              <SortableContext items={visibleVTiers.map(({ index }) => tierDragId(vAxis.id, index))} strategy={rectSortingStrategy}>
+                {visibleVTiers.map(({ tier: rowTier, index: ri }) => (
+                 <React.Fragment key={`row-${ri}`}>
+                    <SortableTierHeader
+                      id={tierDragId(vAxis.id, ri)}
+                      label={rowTier.label}
+                      color={rowTier.color}
+                      className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                    />
 
                   {(() => {
                     const id = `r${ri}-c-1`;
@@ -2396,8 +2506,9 @@ function rebuildContainersForAxes(
                       </Card>
                     );
                   })}
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                ))}
+              </SortableContext>
             </div>
           </div>
 
@@ -2600,7 +2711,7 @@ function rebuildContainersForAxes(
           )}
 
           <DragOverlay>
-            {activeId ? (
+            {activeId && state.items[activeId] ? (
                               <Tile
                                 key={activeId}
                                 id={activeId}
