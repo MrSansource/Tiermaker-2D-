@@ -2838,11 +2838,11 @@ function rebuildContainersForAxes(
           )}
 
           <div className={cx("overflow-x-auto rounded-2xl border overscroll-x-contain", T.cardBg, T.cardBorder, isPoolPinned && "lg:min-h-0 lg:flex-1 lg:overflow-auto")}>
-            <div className="grid gap-2 p-2" style={gridTemplate}>
-              <div />
+            <div className="grid w-max min-w-full gap-2 p-2" style={gridTemplate}>
+              <div className={cx("sticky left-0 top-0 z-30 rounded-xl", T.cardBg)} />
               
               <div
-                className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                className={cx("sticky top-0 z-20 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                 style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
               >
                 À classer
@@ -2855,13 +2855,13 @@ function rebuildContainersForAxes(
                     label={tier.label}
                     color={tier.color}
                     onRename={(label) => updateTier(hAxis.id, index, { label })}
-                    className={cx("sticky top-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                    className={cx("sticky top-0 z-20 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                   />
                 ))}
               </SortableContext>
 
               <div
-                className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                className={cx("sticky left-0 z-20 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                 style={{ backgroundColor: "#6b7280", color: "#ffffff" }}
               >
                 À classer
@@ -2987,7 +2987,7 @@ function rebuildContainersForAxes(
                       label={rowTier.label}
                       color={rowTier.color}
                       onRename={(label) => updateTier(vAxis.id, ri, { label })}
-                      className={cx("sticky left-0 z-10 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
+                      className={cx("sticky left-0 z-20 rounded-xl p-2 text-sm font-semibold border", T.cardBorder)}
                     />
 
                   {(() => {
