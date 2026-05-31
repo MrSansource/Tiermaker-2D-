@@ -1011,6 +1011,7 @@ export default function TierList2D() {
   const [loadingBrightDataImages, setLoadingBrightDataImages] = useState(false);
   const [isPoolPinned, setIsPoolPinned] = useState(false);
   const [poolSplitSide, setPoolSplitSide] = useState(false);
+  const [cellTileColumns, setCellTileColumns] = useState(3);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [seedInput, setSeedInput] = useState("");
@@ -2142,10 +2143,14 @@ function rebuildContainersForAxes(
   const T = DARK;
 
   const vUnclassifiedSize = vAxis.unclassifiedSize || 150;
-  const hUnclassifiedSize = hAxis.unclassifiedSize || 150;
+  const tileGap = 8;
+  const cellPadding = 16;
+  const cellMinWidth = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
+  const cellMinHeight = cellTileColumns * state.tileSize + Math.max(0, cellTileColumns - 1) * tileGap + cellPadding;
+  const hUnclassifiedSize = Math.max(hAxis.unclassifiedSize || 150, cellMinWidth);
 
   const colsPx = visibleHTiers
-    .map(({ index }) => `${(hAxis.tierWidths || [])[index] || 220}px`)
+    .map(({ index }) => `${Math.max((hAxis.tierWidths || [])[index] || 220, cellMinWidth)}px`)
     .join(" ");
 
   const gridTemplate: React.CSSProperties = {
@@ -2752,6 +2757,33 @@ function rebuildContainersForAxes(
               >
                 Supprimer la tuile
               </Button>
+              <div className="w-px h-6 bg-zinc-700 mx-1" />
+              <label className="flex items-center gap-2 text-sm">
+                Taille tuiles
+                <input
+                  type="range"
+                  min={44}
+                  max={112}
+                  step={4}
+                  value={state.tileSize}
+                  onChange={(e) => setState(s => ({ ...s, tileSize: Number(e.target.value) }))}
+                  className="w-28"
+                />
+                <span className="w-8 text-xs text-zinc-400">{state.tileSize}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                Par case
+                <input
+                  type="range"
+                  min={2}
+                  max={10}
+                  step={1}
+                  value={cellTileColumns}
+                  onChange={(e) => setCellTileColumns(Number(e.target.value))}
+                  className="w-28"
+                />
+                <span className="w-10 text-xs text-zinc-400">{cellTileColumns}x{cellTileColumns}</span>
+              </label>
             </div>
           </CardContent>
         </Card>
@@ -2836,7 +2868,7 @@ function rebuildContainersForAxes(
                             moveToContainer(selectedId, id);
                           }}
                         >
-                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
                             {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -2892,7 +2924,7 @@ function rebuildContainersForAxes(
                             moveToContainer(selectedId, id);
                           }}
                         >
-                          <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                          <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
                             {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -2959,7 +2991,7 @@ function rebuildContainersForAxes(
                                 moveToContainer(selectedId, id);
                               }}
                             >
-                              <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
                                 {items.map((itemId) => (
                               <Tile
                                 key={itemId}
@@ -3015,7 +3047,7 @@ function rebuildContainersForAxes(
                                 moveToContainer(selectedId, id);
                               }}
                             >
-                              <div className="relative w-full flex flex-wrap gap-2" style={{ minHeight: 120 }} data-cell-id={id}>
+                              <div className="relative w-full flex flex-wrap gap-2 content-start" style={{ minHeight: cellMinHeight }} data-cell-id={id}>
                                 {items.map((itemId) => (
                               <Tile
                                 key={itemId}
