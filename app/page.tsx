@@ -2465,13 +2465,16 @@ function rebuildContainersForAxes(
           <div
             className={cx(
               isPoolPinned && poolSplitSide
-                ? "grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] lg:h-[calc(100vh-1.5rem)] lg:min-h-[620px]"
+                ? "grid gap-4 lg:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] lg:h-[calc(100vh-1.5rem)] lg:min-h-[620px]"
                 : isPoolPinned
                   ? "grid gap-4 h-[calc(100vh-1.5rem)] min-h-[620px] grid-rows-[minmax(0,2fr)_minmax(240px,1fr)]"
                   : "space-y-6"
             )}
           >
-            <div className={cx(isPoolPinned && "min-h-0 overflow-auto space-y-6 pr-1")}>
+            <div className={cx(
+              isPoolPinned && "min-h-0 flex flex-col gap-4 pr-1 overflow-hidden",
+              isPoolPinned && poolSplitSide && "lg:order-2"
+            )}>
           {colorAxis && (
             <div className={cx("rounded-2xl border p-3", T.cardBg, T.cardBorder)}>
               <div className="flex flex-wrap items-center gap-3">
@@ -2489,7 +2492,7 @@ function rebuildContainersForAxes(
             </div>
           )}
 
-          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder)}>
+          <div className={cx("overflow-auto rounded-2xl border", T.cardBg, T.cardBorder, isPoolPinned && "min-h-0 flex-1")}>
             <div className="grid gap-2 p-2" style={gridTemplate}>
               <div />
               
@@ -2856,7 +2859,10 @@ function rebuildContainersForAxes(
           )}
             </div>
 
-            <div className={cx(isPoolPinned && "min-h-0 overflow-hidden")}>
+            <div className={cx(
+              isPoolPinned && "min-h-0 overflow-hidden",
+              isPoolPinned && poolSplitSide && "lg:order-1"
+            )}>
               {isPoolPinned ? poolCard : null}
             </div>
           </div>
