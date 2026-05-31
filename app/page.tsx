@@ -875,6 +875,7 @@ export default function TierList2D() {
   const [pairsText, setPairsText] = useState("");
   const [loadingWikiImages, setLoadingWikiImages] = useState(false);
   const [loadingGoogleImages, setLoadingGoogleImages] = useState(false);
+  const [loadingSerpImages, setLoadingSerpImages] = useState(false);
   const [isPoolPinned, setIsPoolPinned] = useState(false);
   const [poolSplitSide, setPoolSplitSide] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1569,6 +1570,13 @@ function rebuildContainersForAxes(
     return typeof data?.imageUrl === "string" ? data.imageUrl : "";
   }
 
+  async function findSerpImage(name: string) {
+    const res = await fetch(`/api/serpapi-image?q=${encodeURIComponent(name)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Recherche SerpAPI impossible");
+    return typeof data?.imageUrl === "string" ? data.imageUrl : "";
+  }
+
   async function prefillMissingImages(
     providerLabel: string,
     findImage: (name: string) => Promise<string>,
@@ -1628,6 +1636,10 @@ function rebuildContainersForAxes(
 
   function prefillGoogleImages() {
     return prefillMissingImages("Google Images", findGoogleImage, setLoadingGoogleImages);
+  }
+
+  function prefillSerpImages() {
+    return prefillMissingImages("SerpAPI", findSerpImage, setLoadingSerpImages);
   }
 
   function importPairs() {
@@ -3104,7 +3116,7 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingWikiImages || loadingGoogleImages || !pairsText.trim()}
+                disabled={loadingWikiImages || loadingGoogleImages || loadingSerpImages || !pairsText.trim()}
                 onClick={prefillWikipediaImages}
               >
                 {loadingWikiImages ? "Recherche Wikipedia..." : "Pré-remplir images Wikipedia"}
@@ -3112,11 +3124,20 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingGoogleImages || loadingWikiImages || !pairsText.trim()}
+                disabled={loadingGoogleImages || loadingWikiImages || loadingSerpImages || !pairsText.trim()}
                 onClick={prefillGoogleImages}
                 title="Utilise Google Custom Search. Variables Vercel requises : GOOGLE_CUSTOM_SEARCH_API_KEY et GOOGLE_CUSTOM_SEARCH_CX."
               >
                 {loadingGoogleImages ? "Recherche Google..." : "Pré-remplir images Google"}
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={loadingSerpImages || loadingWikiImages || loadingGoogleImages || !pairsText.trim()}
+                onClick={prefillSerpImages}
+                title="Utilise SerpAPI Google Images. Variable Vercel requise : SERPAPI_API_KEY."
+              >
+                {loadingSerpImages ? "Recherche SerpAPI..." : "Pré-remplir images SerpAPI"}
               </Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
                 <Trash2 className="w-4 h-4 mr-2" />
