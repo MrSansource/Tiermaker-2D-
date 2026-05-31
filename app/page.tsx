@@ -960,6 +960,7 @@ export default function TierList2D() {
   const [loadingGoogleImages, setLoadingGoogleImages] = useState(false);
   const [loadingSerpImages, setLoadingSerpImages] = useState(false);
   const [loadingPinterestImages, setLoadingPinterestImages] = useState(false);
+  const [loadingBrightDataImages, setLoadingBrightDataImages] = useState(false);
   const [isPoolPinned, setIsPoolPinned] = useState(false);
   const [poolSplitSide, setPoolSplitSide] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1714,6 +1715,13 @@ function rebuildContainersForAxes(
     return typeof data?.imageUrl === "string" ? data.imageUrl : "";
   }
 
+  async function findBrightDataImage(name: string) {
+    const res = await fetch(`/api/brightdata-image?q=${encodeURIComponent(name)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Recherche Bright Data impossible");
+    return typeof data?.imageUrl === "string" ? data.imageUrl : "";
+  }
+
   async function prefillMissingImages(
     providerLabel: string,
     findImage: (name: string) => Promise<string>,
@@ -1781,6 +1789,10 @@ function rebuildContainersForAxes(
 
   function prefillPinterestImages() {
     return prefillMissingImages("Pinterest", findPinterestImage, setLoadingPinterestImages);
+  }
+
+  function prefillBrightDataImages() {
+    return prefillMissingImages("Bright Data", findBrightDataImage, setLoadingBrightDataImages);
   }
 
   function importPairs() {
@@ -3284,7 +3296,7 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingWikiImages || loadingGoogleImages || loadingSerpImages || loadingPinterestImages || !pairsText.trim()}
+                disabled={loadingWikiImages || loadingGoogleImages || loadingSerpImages || loadingPinterestImages || loadingBrightDataImages || !pairsText.trim()}
                 onClick={prefillWikipediaImages}
               >
                 {loadingWikiImages ? "Recherche Wikipedia..." : "Pré-remplir images Wikipedia"}
@@ -3292,7 +3304,7 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingGoogleImages || loadingWikiImages || loadingSerpImages || loadingPinterestImages || !pairsText.trim()}
+                disabled={loadingGoogleImages || loadingWikiImages || loadingSerpImages || loadingPinterestImages || loadingBrightDataImages || !pairsText.trim()}
                 onClick={prefillGoogleImages}
                 title="Utilise Google Custom Search. Variables Vercel requises : GOOGLE_CUSTOM_SEARCH_API_KEY et GOOGLE_CUSTOM_SEARCH_CX."
               >
@@ -3301,7 +3313,7 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingSerpImages || loadingWikiImages || loadingGoogleImages || loadingPinterestImages || !pairsText.trim()}
+                disabled={loadingSerpImages || loadingWikiImages || loadingGoogleImages || loadingPinterestImages || loadingBrightDataImages || !pairsText.trim()}
                 onClick={prefillSerpImages}
                 title="Utilise SerpAPI Google Images. Variable Vercel requise : SERPAPI_API_KEY."
               >
@@ -3310,11 +3322,20 @@ function rebuildContainersForAxes(
               <Button
                 variant="outline"
                 className={OUTLINE_DARK}
-                disabled={loadingPinterestImages || loadingSerpImages || loadingWikiImages || loadingGoogleImages || !pairsText.trim()}
+                disabled={loadingPinterestImages || loadingSerpImages || loadingWikiImages || loadingGoogleImages || loadingBrightDataImages || !pairsText.trim()}
                 onClick={prefillPinterestImages}
                 title="Utilise SerpAPI avec une recherche limitee a Pinterest. Consomme aussi une requete SerpAPI par tuile."
               >
                 {loadingPinterestImages ? "Recherche Pinterest..." : "Pre-remplir images Pinterest"}
+              </Button>
+              <Button
+                variant="outline"
+                className={OUTLINE_DARK}
+                disabled={loadingBrightDataImages || loadingPinterestImages || loadingSerpImages || loadingWikiImages || loadingGoogleImages || !pairsText.trim()}
+                onClick={prefillBrightDataImages}
+                title="Utilise Bright Data SERP API. Variables supportees : Brightdata_SerpAPI_Key ou BRIGHTDATA_SERP_API_KEY."
+              >
+                {loadingBrightDataImages ? "Recherche Bright Data..." : "Pre-remplir images Bright Data"}
               </Button>
               <Button variant="outline" className={OUTLINE_DARK} onClick={() => setPairsText("")}>
                 <Trash2 className="w-4 h-4 mr-2" />
