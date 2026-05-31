@@ -446,6 +446,7 @@ function Tile({
   const [isEditingTile, setIsEditingTile] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftImage, setDraftImage] = useState(image || "");
+  const [imageFailed, setImageFailed] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const iconButtonCls = "absolute right-1 z-20 h-5 w-5 inline-flex items-center justify-center rounded-full bg-black/45 hover:bg-black/65 transition border border-white/25";
   const commitEdit = () => {
@@ -569,7 +570,7 @@ function Tile({
         </div>
       )}
 
-      {image ? (
+      {image && !imageFailed ? (
         <>
           <img
             src={image}
@@ -577,28 +578,47 @@ function Tile({
             referrerPolicy="no-referrer"
             loading="lazy"
             className="absolute inset-0 w-full h-full object-cover rounded-2xl"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            onLoad={() => setImageFailed(false)}
+            onError={() => setImageFailed(true)}
           />
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
             {nameContent}
           </div>
         </>
       ) : (
-        tileLink ? (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(tileLink, "_blank", "noopener,noreferrer");
-            }}
-            className="relative text-center leading-tight px-1 break-words z-20 hover:underline"
-            title={`Ouvrir ${tileLink}`}
-          >
-            {name}
-          </button>
+        imageFailed && image ? (
+          <div className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center">
+            <span className="text-[10px] font-semibold leading-tight break-words">{name}</span>
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(image, "_blank", "noopener,noreferrer");
+              }}
+              className="rounded border border-zinc-600 px-1 py-0.5 text-[9px] text-zinc-300 hover:bg-zinc-800"
+              title={image}
+            >
+              ouvrir image
+            </button>
+          </div>
         ) : (
-          <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+          tileLink ? (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(tileLink, "_blank", "noopener,noreferrer");
+              }}
+              className="relative text-center leading-tight px-1 break-words z-20 hover:underline"
+              title={`Ouvrir ${tileLink}`}
+            >
+              {name}
+            </button>
+          ) : (
+            <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+          )
         )
       )}
 
@@ -1331,6 +1351,7 @@ function rebuildContainersForAxes(
         },
       };
     });
+    setSelectedId(null);
   }
 
   function deletePoolItems() {
