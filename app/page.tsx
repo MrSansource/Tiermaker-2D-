@@ -13,6 +13,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { motion } from "framer-motion";
 import LZString from "lz-string";
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -849,6 +850,39 @@ function Droppable({ id, children, onClick }: { id: string; children: React.Reac
       className={cx("min-h-[48px] rounded-md", isOver && "ring-2 ring-indigo-500/60", DARK.cardBg)}
     >
       {children}
+    </div>
+  );
+}
+
+function AuthStatus() {
+  const { user, loading } = useAuth();
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email;
+
+  if (loading) {
+    return <div className="text-xs text-zinc-400">Session...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <a className={cx(OUTLINE_DARK, "inline-flex h-9 items-center rounded-md border px-3 text-sm")} href="/login">
+          Connexion
+        </a>
+        <a className="inline-flex h-9 items-center rounded-md bg-zinc-100 px-3 text-sm font-semibold text-zinc-900 hover:bg-white" href="/signup">
+          Créer un compte
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="max-w-[220px] truncate text-zinc-300" title={displayName || undefined}>
+        {displayName}
+      </span>
+      <a className={cx(OUTLINE_DARK, "inline-flex h-9 items-center rounded-md border px-3 text-sm")} href="/logout">
+        Déconnexion
+      </a>
     </div>
   );
 }
@@ -2340,6 +2374,7 @@ function rebuildContainersForAxes(
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <h1 className="text-xl font-bold leading-tight md:text-3xl">Tier list 2D — {state.categoryLabel}</h1>
           <div className="flex flex-wrap items-center gap-2">
+            <AuthStatus />
             <Button
               variant="secondary"
               onClick={() => {

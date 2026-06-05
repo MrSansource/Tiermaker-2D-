@@ -1,5 +1,6 @@
 import './globals.css';
 import React from 'react';
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 
 export const metadata = {
   title: 'Tier List 2D – Rap FR',
@@ -10,7 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <head><meta charSet="utf-8" /></head>
-      <body>{children}</body>
+      <body>
+        <AuthKitProvider>{children}</AuthKitProvider>
+      </body>
     </html>
   );
 }
