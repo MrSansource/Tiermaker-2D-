@@ -541,7 +541,7 @@ function TileActionButtons({
           <div className="space-y-1">
             {axes.map(axis => {
               const pos = axisPositions?.[axis.id];
-              if (pos === null || pos === -1) return null;
+              if (typeof pos !== "number" || pos === -1) return null;
               const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
               return (
                 <div key={axis.id} className="py-1">
@@ -851,7 +851,7 @@ function Tile({
                 <div className="space-y-1">
                   {axes.map(axis => {
                     const pos = axisPositions?.[axis.id];
-                    if (pos === null || pos === -1) return null;
+                    if (typeof pos !== "number" || pos === -1) return null;
                     const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
                     return (
                       <div key={axis.id} className="py-1">
