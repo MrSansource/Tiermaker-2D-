@@ -483,6 +483,117 @@ function chipCls(active: boolean) {
     active ? "bg-zinc-200 text-zinc-900 border-zinc-300" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700",
   ].join(" ");
 }
+
+function TileActionButtons({
+  id,
+  name,
+  comment,
+  isCommentOpen,
+  showInfo,
+  hasPositions,
+  axes,
+  axisPositions,
+  colorAxis,
+  colorFrame,
+  iconButtonCls,
+  onInfoToggle,
+  onColorCycle,
+  onCommentToggle,
+  onEdit,
+}: {
+  id: string;
+  name: string;
+  comment?: string;
+  isCommentOpen?: boolean;
+  showInfo?: boolean;
+  hasPositions: boolean;
+  axes?: AxisDefinition[];
+  axisPositions?: Record<string, number | null>;
+  colorAxis?: AxisDefinition | null;
+  colorFrame?: { color: string; label: string } | null;
+  iconButtonCls: string;
+  onInfoToggle?: (id: string) => void;
+  onColorCycle?: (id: string) => void;
+  onCommentToggle?: (id: string) => void;
+  onEdit: () => void;
+}) {
+  return (
+    <>
+      {hasPositions && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onInfoToggle?.(id); }}
+          className={iconButtonCls}
+          title="Informations de classement"
+        >
+          <span className="text-[11px] font-bold text-white">i</span>
+        </button>
+      )}
+
+      {showInfo && hasPositions && axes && (
+        <div
+          data-info-panel="1"
+          className="absolute left-full top-0 ml-2 bg-white text-zinc-900 rounded-lg shadow-xl p-3 text-sm z-50 min-w-[200px] border border-zinc-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="font-semibold mb-2 border-b pb-1 text-base">{name}</div>
+          <div className="space-y-1">
+            {axes.map(axis => {
+              const pos = axisPositions?.[axis.id];
+              if (pos === null || pos === -1) return null;
+              const tierLabel = axis.tiers[pos]?.label || `Tier ${pos}`;
+              return (
+                <div key={axis.id} className="py-1">
+                  <span className="font-medium">{axis.label} :</span> {tierLabel}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {colorAxis && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onColorCycle?.(id); }}
+          className={iconButtonCls}
+          style={colorFrame ? { backgroundColor: colorFrame.color, color: textColorForBg(colorFrame.color) } : undefined}
+          title={`Changer ${colorAxis.label}`}
+        >
+          <Palette className="h-3 w-3" />
+        </button>
+      )}
+
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+        className={iconButtonCls}
+        title="Modifier la tuile"
+      >
+        <Edit className="h-3 w-3 text-zinc-100" />
+      </button>
+
+      {comment && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onCommentToggle?.(id); }}
+          className={cx(iconButtonCls, "border-transparent")}
+          title={isCommentOpen ? "Masquer le commentaire" : "Afficher le commentaire"}
+        >
+          {isCommentOpen ? <X className="h-3 w-3 text-zinc-100" /> : <MessageSquare className="h-3 w-3 text-zinc-100" />}
+        </button>
+      )}
+    </>
+  );
+}
+
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
   isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
@@ -507,8 +618,12 @@ function Tile({
   const [draftImage, setDraftImage] = useState(image || "");
   const [imageFailed, setImageFailed] = useState(false);
   const renderedImage = showImage ? displayImageUrl(image) : undefined;
+  const hasVisibleImage = Boolean(renderedImage && !imageFailed);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-  const iconButtonCls = "absolute right-1 z-20 h-5 w-5 inline-flex items-center justify-center rounded-full bg-black/45 hover:bg-black/65 transition border border-white/25";
+  const iconButtonCls = cx(
+    "z-20 inline-flex items-center justify-center rounded-full transition border border-white/25",
+    hasVisibleImage ? "relative h-4 w-4 bg-zinc-950/70 hover:bg-zinc-800" : "absolute right-1 h-5 w-5 bg-black/45 hover:bg-black/65"
+  );
   const commitEdit = () => {
     const clean = draftName.trim();
     const cleanImage = draftImage.trim();
@@ -527,7 +642,7 @@ function Tile({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    width: tileSize,
+    width: hasVisibleImage ? tileSize + 24 : tileSize,
     height: tileSize,
     touchAction: "none",
     ...(colorFrame
@@ -572,8 +687,9 @@ function Tile({
         onClick?.(); 
       }}
       className={cx(
-        "relative overflow-visible select-none inline-flex items-center justify-center rounded-2xl shadow-sm border p-2 text-sm font-medium cursor-grab active:cursor-grabbing",
+        "relative overflow-visible select-none inline-flex items-center justify-center rounded-2xl shadow-sm border text-sm font-medium cursor-grab active:cursor-grabbing",
         "bg-zinc-900 border-zinc-700 text-zinc-100",
+        hasVisibleImage ? "p-1.5 gap-1" : "p-2",
         colorFrame ? "border-2" : "",
         selected ? "ring-2 ring-indigo-400" : highlighted ? "ring-2 ring-amber-400" : "",
         showInfo ? "z-50" : "z-0"
@@ -635,21 +751,46 @@ function Tile({
         </div>
       )}
 
-      {renderedImage && !imageFailed ? (
-        <>
+      {hasVisibleImage ? (
+        <div className="relative flex h-full w-full items-stretch gap-1">
+          <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl">
           <img
             src={renderedImage}
             alt={name}
             referrerPolicy="no-referrer"
             loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+            className="absolute inset-0 h-full w-full object-cover"
             onLoad={() => setImageFailed(false)}
             onError={() => setImageFailed(true)}
           />
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center rounded-b-2xl">
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[11px] text-center">
             {nameContent}
           </div>
-        </>
+          </div>
+          <div className="relative flex w-5 shrink-0 flex-col items-center justify-between gap-1 py-0.5">
+            <TileActionButtons
+              id={id}
+              name={name}
+              comment={comment}
+              isCommentOpen={isCommentOpen}
+              showInfo={showInfo}
+              hasPositions={Boolean(hasPositions)}
+              axes={axes}
+              axisPositions={axisPositions}
+              colorAxis={colorAxis}
+              colorFrame={colorFrame}
+              iconButtonCls={iconButtonCls}
+              onInfoToggle={onInfoToggle}
+              onColorCycle={onColorCycle}
+              onCommentToggle={onCommentToggle}
+              onEdit={() => {
+                setDraftName(name);
+                setDraftImage(image || "");
+                setIsEditingTile(true);
+              }}
+            />
+          </div>
+        </div>
       ) : (
         imageFailed && image ? (
           <div className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center">
@@ -688,7 +829,7 @@ function Tile({
         )
       )}
 
-      {hasPositions && (
+      {!hasVisibleImage && hasPositions && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
@@ -722,7 +863,7 @@ function Tile({
               </div>
             )}
 
-      {colorAxis && (
+      {!hasVisibleImage && colorAxis && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
@@ -735,7 +876,7 @@ function Tile({
         </button>
       )}
 
-      <button
+      {!hasVisibleImage && <button
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
@@ -748,9 +889,9 @@ function Tile({
         title="Modifier la tuile"
       >
         <Edit className="h-3 w-3 text-zinc-100" />
-      </button>
+      </button>}
 
-      {comment && (
+      {!hasVisibleImage && comment && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
