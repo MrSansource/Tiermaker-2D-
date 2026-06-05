@@ -47,6 +47,7 @@ type AppState = {
   activeColorAxisId?: string | null;
   tileLinksEnabled?: boolean;
   tileLinkTemplate?: string;
+  showTileImages?: boolean;
   containers: Record<string, string[]>;
   items: Record<string, Item>;
   poolId: string;
@@ -146,6 +147,7 @@ function normalizeStateCategory(state: AppState): AppState {
     activeColorAxisId: state.activeColorAxisId || null,
     tileLinksEnabled: state.tileLinksEnabled || false,
     tileLinkTemplate: state.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE,
+    showTileImages: state.showTileImages !== false,
   };
 }
 
@@ -264,6 +266,18 @@ function displayImageUrl(value?: string) {
   if (!value) return undefined;
   return shouldProxyImageUrl(value) ? `/api/image-proxy?url=${encodeURIComponent(value)}` : value;
 }
+
+const TILE_LABEL_OUTLINE: React.CSSProperties = {
+  textShadow: [
+    "0 1px 2px rgba(0,0,0,0.95)",
+    "1px 0 0 rgba(0,0,0,0.95)",
+    "-1px 0 0 rgba(0,0,0,0.95)",
+    "0 1px 0 rgba(0,0,0,0.95)",
+    "0 -1px 0 rgba(0,0,0,0.95)",
+    "1px 1px 0 rgba(255,255,255,0.75)",
+    "-1px -1px 0 rgba(255,255,255,0.55)",
+  ].join(", "),
+};
 
 function splitImportLine(line: string) {
   if (line.includes("\t")) return line.split("\t").map(cell => cell.trim());
@@ -471,7 +485,7 @@ function chipCls(active: boolean) {
 function Tile({
   id, name, image, comment, tileSize, selected, highlighted, onClick, 
   isCommentOpen, onCommentToggle, axisPositions, axes, showInfo, onInfoToggle, colorFrame,
-  colorAxis, onColorCycle, tileLink, onEdit,
+  colorAxis, onColorCycle, tileLink, onEdit, showImage = true,
 }: {
   id: string; name: string; image?: string; comment?: string; tileSize: number;
   selected?: boolean; highlighted?: boolean; onClick?: () => void;
@@ -485,12 +499,13 @@ function Tile({
   onColorCycle?: (id: string) => void;
   tileLink?: string | null;
   onEdit?: (id: string, updates: { name?: string; image?: string }) => void;
+  showImage?: boolean;
 }) {
   const [isEditingTile, setIsEditingTile] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftImage, setDraftImage] = useState(image || "");
   const [imageFailed, setImageFailed] = useState(false);
-  const renderedImage = displayImageUrl(image);
+  const renderedImage = showImage ? displayImageUrl(image) : undefined;
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const iconButtonCls = "absolute right-1 z-20 h-5 w-5 inline-flex items-center justify-center rounded-full bg-black/45 hover:bg-black/65 transition border border-white/25";
   const commitEdit = () => {
@@ -532,12 +547,13 @@ function Tile({
         window.open(tileLink, "_blank", "noopener,noreferrer");
       }}
       className="relative z-20 max-w-full text-center font-semibold text-white drop-shadow-sm underline-offset-2 hover:underline"
+      style={TILE_LABEL_OUTLINE}
       title={`Ouvrir ${tileLink}`}
     >
       {name}
     </button>
   ) : (
-    <span className="relative z-10 font-semibold text-white drop-shadow-sm">{name}</span>
+    <span className="relative z-10 font-semibold text-white drop-shadow-sm" style={TILE_LABEL_OUTLINE}>{name}</span>
   );
 
   return (
@@ -636,7 +652,7 @@ function Tile({
       ) : (
         imageFailed && image ? (
           <div className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center">
-            <span className="text-[10px] font-semibold leading-tight break-words">{name}</span>
+            <span className="text-[10px] font-semibold leading-tight break-words text-white" style={TILE_LABEL_OUTLINE}>{name}</span>
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
@@ -659,13 +675,14 @@ function Tile({
                 e.stopPropagation();
                 window.open(tileLink, "_blank", "noopener,noreferrer");
               }}
-              className="relative text-center leading-tight px-1 break-words z-20 hover:underline"
+              className="relative text-center leading-tight px-1 break-words z-20 text-white hover:underline"
+              style={TILE_LABEL_OUTLINE}
               title={`Ouvrir ${tileLink}`}
             >
               {name}
             </button>
           ) : (
-            <span className="relative text-center leading-tight px-1 break-words z-10">{name}</span>
+            <span className="relative text-center leading-tight px-1 break-words z-10 text-white" style={TILE_LABEL_OUTLINE}>{name}</span>
           )
         )
       )}
@@ -746,7 +763,6 @@ function Tile({
     </motion.div>
   );
 }
-
 function SortableTierHeader({
   id,
   label,
@@ -818,7 +834,6 @@ function SortableTierHeader({
     </div>
   );
 }
-
 function Droppable({ id, children, onClick }: { id: string; children: React.ReactNode; onClick?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -892,6 +907,7 @@ function stateFromNames(names: string[]): AppState {
     activeColorAxisId: null,
     tileLinksEnabled: false,
     tileLinkTemplate: DEFAULT_TILE_LINK_TEMPLATE,
+    showTileImages: true,
     containers,
     items,
     poolId: POOL_ID,
@@ -993,6 +1009,7 @@ function migrateOldState(obj: any): AppState | null {
     activeColorAxisId: obj.activeColorAxisId || null,
     tileLinksEnabled: Boolean(obj.tileLinksEnabled),
     tileLinkTemplate: obj.tileLinkTemplate || DEFAULT_TILE_LINK_TEMPLATE,
+    showTileImages: obj.showTileImages !== false,
     containers,
     items,
     poolId: POOL_ID,
@@ -2282,6 +2299,7 @@ function rebuildContainersForAxes(
                           image={state.items[itemId]?.image}
                           comment={state.items[itemId]?.comment}
                           tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                           selected={selectedId === itemId}
                           highlighted={matchedIds.has(itemId)}
                           onClick={() => setSelectedId(itemId)}
@@ -2721,6 +2739,14 @@ function rebuildContainersForAxes(
                 />
                 Liens sur les noms
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={state.showTileImages !== false}
+                  onChange={(e) => setState(s => ({ ...s, showTileImages: e.target.checked }))}
+                />
+                Afficher les images
+              </label>
               <div className="flex flex-col gap-1 min-w-72">
                 <Input
                   className={INPUT_DARK + " w-80 max-w-full"}
@@ -2895,6 +2921,7 @@ function rebuildContainersForAxes(
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -2951,6 +2978,7 @@ function rebuildContainersForAxes(
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3018,6 +3046,7 @@ function rebuildContainersForAxes(
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3074,6 +3103,7 @@ function rebuildContainersForAxes(
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3191,6 +3221,7 @@ function rebuildContainersForAxes(
                                 image={state.items[itemId]?.image}
                                 comment={state.items[itemId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 selected={selectedId === itemId}
                                 highlighted={matchedIds.has(itemId)}
                                 onClick={() => setSelectedId(itemId)}
@@ -3353,6 +3384,7 @@ function rebuildContainersForAxes(
                                 image={state.items[activeId]?.image}
                                 comment={state.items[activeId]?.comment}
                                 tileSize={boardTileSize}
+                          showImage={state.showTileImages !== false}
                                 isCommentOpen={openCommentId === activeId}
                                 onCommentToggle={toggleCommentFor}
                                 axisPositions={state.items[activeId]?.axisPositions}
