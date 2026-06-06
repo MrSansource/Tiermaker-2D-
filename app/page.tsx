@@ -2348,9 +2348,10 @@ function rebuildContainersForAxes(
   const tileGap = 8;
   const cellPadding = 32;
   const boardTileSize = isMobileView ? Math.min(state.tileSize, 72) : state.tileSize;
+  const boardTileWidth = state.showTileImages !== false ? boardTileSize + 24 : boardTileSize;
   const boardCellTileColumns = isMobileView ? Math.min(cellTileColumns, 2) : cellTileColumns;
   const rowLabelColumn = isMobileView ? "92px" : "minmax(140px, max-content)";
-  const cellMinWidth = boardCellTileColumns * boardTileSize + Math.max(0, boardCellTileColumns - 1) * tileGap + cellPadding;
+  const cellMinWidth = boardCellTileColumns * boardTileWidth + Math.max(0, boardCellTileColumns - 1) * tileGap + cellPadding;
   const cellMinHeightForCount = (count: number) => {
     if (count <= 0) return 48;
     const rows = Math.ceil(count / boardCellTileColumns);
